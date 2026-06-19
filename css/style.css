@@ -1,0 +1,77 @@
+/* Fabrik — UI styling. Big, friendly, high-contrast for ages 6-8. */
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #0e141d; overflow: hidden;
+  font-family: "Comic Sans MS", "Baloo 2", "Segoe UI", system-ui, sans-serif; color: #fff; }
+#stage { position: relative; width: 100vw; height: 100vh; }
+#game { display: block; width: 100%; height: 100%; image-rendering: pixelated; background: #1b2a3a; }
+#ui { position: absolute; inset: 0; pointer-events: none; }
+#ui button, #ui .slot, #ui .bitem, #ui .sw, #ui input, #ui .cont, #ui .del, #ui .world { pointer-events: auto; }
+/* full-screen overlays must capture clicks so they don't leak to the game canvas */
+#ui .screen, #ui .modal, #ui .bag { pointer-events: auto; }
+
+button { font-family: inherit; font-size: 16px; font-weight: 700; border: none; border-radius: 12px;
+  padding: 10px 14px; background: #ffd54a; color: #4a3500; cursor: pointer; box-shadow: 0 3px 0 #c79a14; }
+button:hover { filter: brightness(1.05); }
+button:active { transform: translateY(2px); box-shadow: 0 1px 0 #c79a14; }
+
+/* ---- title screen ---- */
+.screen { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 50% 30%, #25405c, #0e141d); }
+.screen.hidden, .hidden { display: none !important; }
+.card { background: #16263a; border: 4px solid #2f4d6f; border-radius: 22px; padding: 26px 30px;
+  width: min(620px, 92vw); text-align: center; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+.card h1 { font-size: 44px; margin: 0 0 4px; }
+.card p { color: #bcd0e6; margin: 6px 0 16px; }
+.card .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.card input { font-size: 18px; padding: 10px 14px; border-radius: 12px; border: 3px solid #3a5d85;
+  background: #0e1c2c; color: #fff; width: 280px; }
+.worlds { display: grid; gap: 8px; margin: 10px 0; }
+.world { display: flex; align-items: center; gap: 10px; background: #0e1c2c; border-radius: 12px; padding: 8px 12px; }
+.world b { font-size: 18px; }
+.world span { color: #9fb6cf; margin-left: auto; }
+.hint { font-size: 13px; color: #87a0bb; margin-top: 14px; }
+
+/* ---- HUD ---- */
+.hud { position: absolute; inset: 0; }
+.milestone { position: absolute; left: 14px; top: 14px; max-width: 320px;
+  background: rgba(14,28,44,.86); border: 3px solid #3a5d85; border-radius: 16px; padding: 10px 14px; }
+.mtitle { font-size: 18px; font-weight: 800; }
+.mblurb { font-size: 13px; color: #bcd0e6; margin: 3px 0; }
+.mprog { font-size: 15px; margin-top: 4px; }
+.mprog b { color: #ffe27a; }
+
+.buttons { position: absolute; right: 14px; top: 14px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.buttons button { font-size: 14px; padding: 8px 12px; }
+
+.toasts { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.toast { background: rgba(0,0,0,.7); border-radius: 12px; padding: 8px 16px; font-size: 16px; font-weight: 700; }
+
+.hotbar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 8px; }
+.slot { width: 78px; background: rgba(14,28,44,.9); border: 3px solid #3a5d85; border-radius: 14px;
+  padding: 6px 4px 4px; text-align: center; cursor: pointer; position: relative; }
+.slot.active { border-color: #ffd54a; background: rgba(60,46,8,.9); }
+.slot .num { position: absolute; top: 2px; left: 6px; font-size: 11px; color: #8fb; }
+.slot .ic { font-size: 26px; line-height: 1; }
+.slot .nm { font-size: 11px; color: #cfe0f2; }
+
+/* ---- modal panels (build menu, recipe picker, bag) ---- */
+.modal, .bag { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.45); }
+.panel { background: #16263a; border: 4px solid #2f4d6f; border-radius: 20px; padding: 20px 24px;
+  width: min(720px, 94vw); max-height: 86vh; overflow: auto; }
+.panel h2 { margin: 0 0 12px; font-size: 26px; }
+.panel h3 { margin: 14px 0 6px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+.bitem { background: #0e1c2c; border: 3px solid #2f4d6f; border-radius: 14px; padding: 10px 6px;
+  text-align: center; cursor: pointer; }
+.bitem:hover { border-color: #6fa8e0; }
+.bitem.sel { border-color: #ffd54a; background: #3a2e08; }
+.bitem.locked { opacity: .55; cursor: not-allowed; }
+.bitem .ic { font-size: 30px; }
+.bitem .nm { font-size: 14px; font-weight: 700; }
+.bitem .ms { font-size: 12px; color: #9fb6cf; }
+.panel .close { margin-top: 16px; }
+
+.colors { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
+.sw { width: 40px; height: 40px; border-radius: 50%; border: 4px solid #2f4d6f; cursor: pointer; }
+.sw.sel { border-color: #ffd54a; transform: scale(1.1); }

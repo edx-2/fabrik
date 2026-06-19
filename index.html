@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Fabrik — Factory & Cars</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div id="stage">
+    <canvas id="game" width="960" height="600"></canvas>
+    <div id="ui"></div>
+  </div>
+
+  <!-- Optional: generated art manifest. Created by assets/generate_assets.py.
+       It is loaded if present; otherwise the game uses built-in placeholder art. -->
+  <script src="assets/generated/manifest.js" onerror="console.log('[fabrik] no generated assets yet — using placeholders')"></script>
+
+  <!-- Game code (classic scripts so the game runs by double-clicking this file). -->
+  <script src="js/util.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/assets.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/factory.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/car.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/save.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+  <script>
+    (function () {
+      var canvas = document.getElementById('game');
+      function fit() {
+        // keep internal resolution crisp while filling the window
+        var maxW = window.innerWidth, maxH = window.innerHeight;
+        canvas.width = Math.min(1280, Math.max(640, maxW));
+        canvas.height = Math.min(800, Math.max(400, maxH));
+      }
+      window.addEventListener('resize', fit);
+      fit();
+      FAB.UI.boot(canvas);
+    })();
+  </script>
+</body>
+</html>
