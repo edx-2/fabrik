@@ -217,6 +217,7 @@ FAB.Factory.prototype.tick = function (game) {
     else { src.outBuf[item]--; if (!src.outBuf[item]) delete src.outBuf[item]; }
     // give to destination
     if (dst.kind === 'belt') self.dropOnBelt(dst, item); else self.insert(dst, item);
+    e.carryItem = item;   // remembered so the render can animate it being carried across
     e.cooldown = 4;
   });
 

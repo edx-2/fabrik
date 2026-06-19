@@ -316,11 +316,60 @@ FAB.Game.prototype.drawBelt = function (ctx, e, sx, sy) {
 };
 
 FAB.Game.prototype.drawArm = function (ctx, e, sx, sy) {
-  var T = FAB.TILE, cx = sx + T / 2, cy = sy + T / 2, f = FAB.DIR[e.dir], b = FAB.DIR[FAB.opposite(e.dir)];
-  ctx.fillStyle = '#caa23c'; ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#e6c45a'; ctx.lineWidth = 4;
-  ctx.beginPath(); ctx.moveTo(cx + b.x * 10, cy + b.y * 10); ctx.lineTo(cx + f.x * 12, cy + f.y * 12); ctx.stroke();
-  ctx.fillStyle = '#fff2b0'; ctx.beginPath(); ctx.arc(cx + f.x * 12, cy + f.y * 12, 4, 0, Math.PI * 2); ctx.fill();
+  var T = FAB.TILE, cx = sx + T / 2, cy = sy + T / 2;
+  var b = FAB.DIR[FAB.opposite(e.dir)];            // rest pose reaches toward the grab side
+  var backAngle = Math.atan2(b.y, b.x);
+  var now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
+  var phase = e.x * 0.7 + e.y * 1.3;               // de-sync neighbouring arms
+
+  // t = 0 reaching BACK (grab) ... 1 reaching FRONT (drop)
+  var working = e.cooldown > 0, t, chomp;
+  if (working) {
+    var prog = FAB.clamp(1 - e.cooldown / 4, 0, 1);
+    t = FAB.clamp(FAB.easeOutBack(prog), -0.1, 1.1); // bouncy snap as it delivers
+    chomp = 0.12;                                   // claw grips while carrying
+  } else {
+    t = 0.06 + 0.05 * Math.sin(now * 3 + phase);    // gentle idle bob near grab pose
+    chomp = 0.45 + 0.20 * Math.sin(now * 6 + phase);// claw lazily opens & closes
+  }
+  var ang = backAngle + t * Math.PI;               // sweep up and over to the drop side
+  var reach = T * 0.42 * (1 - 0.25 * Math.sin(FAB.clamp(t, 0, 1) * Math.PI)); // scoop in mid-swing
+  var lift = working ? -3 * Math.sin(FAB.clamp(t, 0, 1) * Math.PI) : 0;
+  var tipx = cx + Math.cos(ang) * reach, tipy = cy + Math.sin(ang) * reach + lift;
+
+  ctx.save();
+  // soft shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.16)'; ctx.beginPath(); ctx.ellipse(cx, cy + 9, 9, 4, 0, 0, Math.PI * 2); ctx.fill();
+
+  // springy arm (a bowed curve that flexes more while working)
+  var bow = working ? 6 : 2;
+  var mx = (cx + tipx) / 2 - Math.sin(ang) * bow;
+  var my = (cy + tipy) / 2 + Math.cos(ang) * bow;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#e6c45a'; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.quadraticCurveTo(mx, my, tipx, tipy); ctx.stroke();
+  ctx.strokeStyle = '#caa23c'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.quadraticCurveTo(mx, my, tipx, tipy); ctx.stroke();
+
+  // shoulder bolt with a little pop when a grab begins
+  var pop = working ? 1 + 0.18 * Math.max(0, 1 - t * 2.5) : 1;
+  ctx.fillStyle = '#b07d1e'; ctx.beginPath(); ctx.arc(cx, cy, 6.5 * pop, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ffe27a'; ctx.beginPath(); ctx.arc(cx, cy, 3.6 * pop, 0, Math.PI * 2); ctx.fill();
+
+  // two-prong claw that chomps
+  ctx.strokeStyle = '#9a7b16'; ctx.lineWidth = 3;
+  for (var s = -1; s <= 1; s += 2) {
+    var ca = ang + s * chomp;
+    ctx.beginPath(); ctx.moveTo(tipx, tipy); ctx.lineTo(tipx + Math.cos(ca) * 7, tipy + Math.sin(ca) * 7); ctx.stroke();
+  }
+
+  // the item being carried across, riding in the claw
+  if (working && e.carryItem && t < 0.92) {
+    var item = FAB.ITEMS[e.carryItem];
+    if (item && !FAB.Assets.draw(ctx, 'item_' + e.carryItem, tipx - 8, tipy - 8, 16, 16, 0))
+      if (item) FAB.Placeholder.token(ctx, tipx, tipy, 6, item.color, item.icon);
+  }
+  ctx.restore();
 };
 
 FAB.Game.prototype.drawPlayer = function (ctx) {
