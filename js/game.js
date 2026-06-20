@@ -222,12 +222,16 @@ FAB.Game.prototype.render = function () {
     else { var dec = this.world.decor[FAB.key(x, y)]; if (dec) { ctx.font = '20px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(dec, x * T - cam.x + T / 2, y * T - cam.y + T / 2); } }
   }
 
-  // factory entities
-  var self = this;
+  // factory entities, drawn in layers so nothing covers belt cargo:
+  //   1) all belt BODIES   2) all belt ITEMS   3) machines/pipes/arms on top
+  var self = this, belts = [], others = [];
   this.factory.eachEntity(function (e) {
     if (e.x + e.size < x0 || e.x > x1 || e.y + e.size < y0 || e.y > y1) return;
-    self.drawEntity(ctx, e);
+    if (e.kind === 'belt') belts.push(e); else others.push(e);
   });
+  belts.forEach(function (e) { self.drawBeltBody(ctx, e); });
+  belts.forEach(function (e) { self.drawBeltItems(ctx, e); });
+  others.forEach(function (e) { self.drawEntity(ctx, e); });
 
   // props
   this.props.forEach(function (p) {
@@ -258,7 +262,7 @@ FAB.Game.prototype.drawNode = function (ctx, node, sx, sy) {
 FAB.Game.prototype.drawEntity = function (ctx, e) {
   var T = FAB.TILE, cam = this.cam, sx = e.x * T - cam.x, sy = e.y * T - cam.y, sz = e.size * T;
   var def = FAB.MACHINES[e.type];
-  if (e.kind === 'belt') { this.drawBelt(ctx, e, sx, sy); return; }
+  if (e.kind === 'belt') { this.drawBeltBody(ctx, e); this.drawBeltItems(ctx, e); return; }
   if (e.kind === 'pipe') {
     ctx.fillStyle = '#2f5e36'; FAB.roundRect(ctx, sx + 8, sy + 8, T - 16, T - 16, 4); ctx.fill();
     ctx.strokeStyle = '#7fe0a0'; ctx.lineWidth = 3; ctx.stroke(); return;
@@ -294,24 +298,104 @@ FAB.Game.prototype.drawDirArrow = function (ctx, e, sx, sy, sz) {
   ctx.restore();
 };
 
-FAB.Game.prototype.drawBelt = function (ctx, e, sx, sy) {
-  var T = FAB.TILE, d = FAB.DIR[e.dir];
-  ctx.fillStyle = '#3a3d44'; ctx.fillRect(sx + 2, sy + 2, T - 4, T - 4);
-  // animated chevrons
-  ctx.strokeStyle = '#6f7782'; ctx.lineWidth = 3;
-  var cx = sx + T / 2, cy = sy + T / 2;
-  ctx.beginPath();
-  ctx.moveTo(cx - d.y * 6 - d.x * 8, cy + d.x * 6 - d.y * 8);
-  ctx.lineTo(cx + d.x * 8, cy + d.y * 8);
-  ctx.lineTo(cx + d.y * 6 - d.x * 8, cy - d.x * 6 - d.y * 8);
-  ctx.stroke();
-  // items
+// Work out whether this belt runs straight or curves, and which side feeds it.
+// A neighbour belt at side k feeds INTO this belt when its dir == opposite(k).
+// Straight feed (from behind) wins; if exactly one side feeds, we draw a corner.
+FAB.Game.prototype.beltShape = function (e) {
+  var D = e.dir, back = (D + 2) & 3, left = (D + 3) & 3, right = (D + 1) & 3, f = this.factory;
+  function feeds(k, want) {
+    var n = f.at(e.x + FAB.DIR[k].x, e.y + FAB.DIR[k].y);
+    return n && n.kind === 'belt' && n.dir === want;
+  }
+  var straight = feeds(back, D);
+  var leftFeed = feeds(left, right);   // belt on our left pointing across into us
+  var rightFeed = feeds(right, left);  // belt on our right pointing across into us
+  if (straight || (leftFeed && rightFeed) || (!leftFeed && !rightFeed)) return { type: 'straight', from: back };
+  return { type: 'corner', from: leftFeed ? left : right };
+};
+
+// Returns pointAt(p): the screen point for belt-progress p in [0,1] (entry -> exit),
+// following a straight line or a quarter-circle for corners.
+FAB.Game.prototype.beltPath = function (e, shape, sx, sy) {
+  var T = FAB.TILE, h = T / 2, cx = sx + h, cy = sy + h;
+  if (shape.type === 'straight') {
+    var d = FAB.DIR[e.dir];
+    return function (p) { return { x: cx + d.x * h * (2 * p - 1), y: cy + d.y * h * (2 * p - 1) }; };
+  }
+  var df = FAB.DIR[shape.from], dd = FAB.DIR[e.dir];
+  var ccx = cx + df.x * h + dd.x * h, ccy = cy + df.y * h + dd.y * h; // tile corner = arc centre
+  var aIn = Math.atan2(-dd.y, -dd.x), aOut = Math.atan2(-df.y, -df.x);
+  var delta = aOut - aIn;
+  while (delta > Math.PI) delta -= 2 * Math.PI;
+  while (delta < -Math.PI) delta += 2 * Math.PI;   // shortest 90-degree sweep
+  return function (p) { var a = aIn + delta * p; return { x: ccx + h * Math.cos(a), y: ccy + h * Math.sin(a) }; };
+};
+
+// Belt rendering is split into BODY and ITEMS so the render loop can draw every
+// belt body first and then every belt's cargo on top — otherwise a neighbouring
+// belt's body would paint over the items near the shared edge.
+FAB.Game.prototype.drawBeltBody = function (ctx, e) {
+  var T = FAB.TILE, sx = e.x * T - this.cam.x, sy = e.y * T - this.cam.y;
+  var shape = this.beltShape(e);
+  var pointAt = this.beltPath(e, shape, sx, sy);
+  var SAMP = shape.type === 'corner' ? 12 : 1, pts = [], i;
+  for (i = 0; i <= SAMP; i++) pts.push(pointAt(i / SAMP));
+
+  // 'butt' caps end the stroke flat at the tile edge so neighbouring belts abut
+  // seamlessly (round caps poked a half-circle into the next tile). Round joins
+  // keep the corner arc smooth.
+  function strokePath(w, color, cap) {
+    ctx.lineWidth = w; ctx.strokeStyle = color; ctx.lineCap = cap || 'butt'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+    for (var j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x, pts[j].y);
+    ctx.stroke();
+  }
+
+  ctx.save();
+  strokePath(T * 0.92, 'rgba(0,0,0,0.16)');      // ground shadow
+  strokePath(T * 0.90, '#22252b');               // dark outer frame
+  strokePath(T * 0.82, '#5a626e');               // metallic side rails
+  strokePath(T * 0.78, '#3a3f48');               // rail inner bevel
+  strokePath(T * 0.60, '#2f333b');               // belt rubber surface
+
+  // animated treads scrolling along the belt at the real transport speed
+  var now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
+  var N = 4, speed = 1.35; // tiles/sec (BELT_SPEED 0.17 * 8 ticks)
+  ctx.lineCap = 'butt';
+  for (var k = 0; k < N; k++) {
+    var p = ((k / N) + now * speed) % 1;
+    var a = pointAt(Math.min(1, p + 0.03)), b = pointAt(Math.max(0, p - 0.03));
+    var ang = Math.atan2(a.y - b.y, a.x - b.x);
+    var pt = pointAt(p), nx = Math.cos(ang + Math.PI / 2), ny = Math.sin(ang + Math.PI / 2);
+    ctx.strokeStyle = '#646b78'; ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(pt.x - nx * T * 0.29, pt.y - ny * T * 0.29);
+    ctx.lineTo(pt.x + nx * T * 0.29, pt.y + ny * T * 0.29);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(pt.x - nx * T * 0.29 + Math.cos(ang) * 2, pt.y - ny * T * 0.29 + Math.sin(ang) * 2);
+    ctx.lineTo(pt.x + nx * T * 0.29 + Math.cos(ang) * 2, pt.y + ny * T * 0.29 + Math.sin(ang) * 2);
+    ctx.stroke();
+  }
+  strokePath(2, 'rgba(255,255,255,0.06)');       // faint center sheen
+  ctx.restore();
+};
+
+// Drawn in a second pass (after every belt body) so cargo is never clipped by a
+// neighbouring belt. Items follow the same path, so they round corners too.
+FAB.Game.prototype.drawBeltItems = function (ctx, e) {
+  if (!e.items.length) return;
+  var T = FAB.TILE, sx = e.x * T - this.cam.x, sy = e.y * T - this.cam.y;
+  var shape = this.beltShape(e);
+  var pointAt = this.beltPath(e, shape, sx, sy);
   for (var i = 0; i < e.items.length; i++) {
     var it = e.items[i], item = FAB.ITEMS[it.item];
-    var px = sx + T / 2 + d.x * (it.pos - 0.5) * T;
-    var py = sy + T / 2 + d.y * (it.pos - 0.5) * T;
-    if (!FAB.Assets.draw(ctx, 'item_' + it.item, px - 9, py - 9, 18, 18, 0))
-      FAB.Placeholder.token(ctx, px, py, 8, item.color, item.icon);
+    var ip = pointAt(FAB.clamp(it.pos, 0, 1));
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath(); ctx.ellipse(ip.x, ip.y + 5, 8, 3, 0, 0, Math.PI * 2); ctx.fill();
+    if (!FAB.Assets.draw(ctx, 'item_' + it.item, ip.x - 9, ip.y - 9, 18, 18, 0))
+      FAB.Placeholder.token(ctx, ip.x, ip.y, 8, item.color, item.icon);
   }
 };
 
