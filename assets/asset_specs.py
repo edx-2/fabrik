@@ -91,9 +91,11 @@ def _tile(id_, name, look, suffix="", variation=""):
         cell=96, bg="keep",
         prompt=(
             f"{STYLE} A seamless, tileable top-down ground texture of {name}. {look} "
-            f"{variation} Flat even lighting, no objects sticking out, no shadows, edges "
-            f"that tile seamlessly with copies of itself. Fills the whole square frame "
-            f"edge to edge."
+            f"{variation} Subtle, gentle, LOW-CONTRAST detail with a natural, irregular, "
+            f"organic look. Avoid any obvious repeating pattern, regular grid, stripes, "
+            f"diagonal cross-hatch, or strong evenly-spaced features. Flat even lighting, "
+            f"no objects sticking out, no shadows, edges that tile seamlessly with copies "
+            f"of itself. Fills the whole square frame edge to edge."
         ),
     )
 
@@ -158,8 +160,8 @@ _TILES = [
         ["with fine gravel.", "with bigger cracked boulders.", "with mossy stone patches."]),
     ("quarry", "sandy quarry ground", "Pale tan sand and gravel.",
         ["with rippled sand.", "with small scattered pebbles.", "with dry cracked earth."]),
-    ("marsh", "oily marsh ground", "Murky greenish-brown muddy marsh.",
-        ["with little dark puddles.", "with reeds and bubbles.", "with oily rainbow sheen spots."]),
+    ("marsh", "dark marsh ground", "Murky greenish-brown muddy marsh.",
+        ["with little dark puddles.", "with reeds and bubbles.", "with some vegetation."]),
     ("lake", "shallow water", "Calm bright blue water.",
         ["with gentle ripples.", "with soft wave highlights.", "with little sparkles."]),
     ("rainbow", "magical pastel hills", "Soft pastel rainbow-tinted grass.",

@@ -10,3 +10,7 @@ Thumbs.db
 *.swp
 .vscode/
 .idea/
+
+# local screenshot tooling (not part of the game)
+/screenshot_harness.html
+/*.png

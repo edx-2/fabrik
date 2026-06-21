@@ -15,28 +15,32 @@ FAB.World = function (seed) {
 FAB.World.prototype.idx = function (x, y) { return y * this.w + x; };
 FAB.World.prototype.inBounds = function (x, y) { return x >= 0 && y >= 0 && x < this.w && y < this.h; };
 
+// Continuous biome classifier — works at any (fractional) coordinate because the
+// underlying noise is continuous. Used both to fill the tile grid and (in the
+// renderer) to draw smooth, curved boundaries that aren't locked to tile edges.
+FAB.World.prototype.classifyBiome = function (fx, fy) {
+  if (!this._n1) { this._n1 = FAB.makeNoise(this.seed + ':b1'); this._n2 = FAB.makeNoise(this.seed + ':b2'); }
+  var cx = this.w / 2, cy = this.h / 2;
+  var e = this._n1(fx * 0.045, fy * 0.045);
+  var m = this._n2(fx * 0.06 + 10, fy * 0.06 + 10);
+  var d2 = FAB.dist2(fx, fy, cx, cy);
+  if (d2 < 14 * 14) return 'meadow';               // gentle spawn area
+  if (e < 0.30) return 'lake';
+  if (e > 0.72 && m > 0.5) return 'rocky';
+  if (e > 0.68 && m <= 0.5) return 'quarry';
+  if (m < 0.32 && e < 0.5) return 'marsh';
+  if (m > 0.70 && e < 0.6) return 'forest';
+  if (Math.sqrt(d2) / (this.w * 0.5) > 0.82) return 'rainbow';
+  return 'meadow';
+};
+
 FAB.World.prototype.generate = function () {
-  var n1 = FAB.makeNoise(this.seed + ':b1');
-  var n2 = FAB.makeNoise(this.seed + ':b2');
   var rng = FAB.makeRng(this.seed + ':world');
   var cx = this.w / 2, cy = this.h / 2;
 
   for (var y = 0; y < this.h; y++) {
     for (var x = 0; x < this.w; x++) {
-      var e = n1(x * 0.045, y * 0.045);
-      var m = n2(x * 0.06 + 10, y * 0.06 + 10);
-      var d = Math.sqrt(FAB.dist2(x, y, cx, cy)) / (this.w * 0.5); // 0 center -> 1 edge
-      var b;
-      // spawn area is always gentle meadow
-      if (FAB.dist2(x, y, cx, cy) < 14 * 14) b = 'meadow';
-      else if (e < 0.30) b = 'lake';
-      else if (e > 0.72 && m > 0.5) b = 'rocky';
-      else if (e > 0.68 && m <= 0.5) b = 'quarry';
-      else if (m < 0.32 && e < 0.5) b = 'marsh';
-      else if (m > 0.70 && e < 0.6) b = 'forest';
-      else if (d > 0.82) b = 'rainbow';
-      else b = 'meadow';
-      this.biome[this.idx(x, y)] = b;
+      this.biome[this.idx(x, y)] = this.classifyBiome(x, y);
     }
   }
 
@@ -94,20 +98,20 @@ FAB.World.prototype.biomeAt = function (x, y) {
   return this.biome[this.idx(x, y)];
 };
 
-// Continuous biome lookup for smooth rendering: read the discrete biome grid at a
-// position that has been pushed around by noise ("domain warp"). This makes the
-// boundaries between areas wander as organic curves instead of following the
-// square tile grid — without changing gameplay (which still uses the tile grid).
+// Continuous biome lookup for smooth rendering. Classifies directly from the
+// continuous noise (so boundaries are smooth iso-contours, NOT tile-aligned
+// steps), with a gentle domain warp added for extra organic curviness. Gameplay
+// still uses the tile grid, so nothing else changes.
 FAB.World.prototype.biomeAtFine = function (fx, fy) {
   if (!this._wa) { this._wa = FAB.makeNoise(this.seed + ':warpA'); this._wb = FAB.makeNoise(this.seed + ':warpB'); }
-  var lo = 0.085, hi = 0.27;
+  var lo = 0.09, hi = 0.26;
   var wx = fx
-    + 1.7 * (this._wa(fx * lo, fy * lo) - 0.5)
-    + 0.7 * (this._wa(fx * hi + 5.2, fy * hi) - 0.5);
+    + 1.4 * (this._wa(fx * lo, fy * lo) - 0.5)
+    + 0.6 * (this._wa(fx * hi + 5.2, fy * hi) - 0.5);
   var wy = fy
-    + 1.7 * (this._wb(fx * lo, fy * lo) - 0.5)
-    + 0.7 * (this._wb(fx * hi, fy * hi + 5.2) - 0.5);
-  return this.biomeAt(Math.round(wx), Math.round(wy));
+    + 1.4 * (this._wb(fx * lo, fy * lo) - 0.5)
+    + 0.6 * (this._wb(fx * hi, fy * hi + 5.2) - 0.5);
+  return this.classifyBiome(wx, wy);
 };
 FAB.World.prototype.nodeAt = function (x, y) { return this.nodes[FAB.key(x, y)] || null; };
 FAB.World.prototype.isWater = function (x, y) { return this.biomeAt(x, y) === 'lake'; };

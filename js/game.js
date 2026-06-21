@@ -277,12 +277,39 @@ FAB.Game.prototype.tileVariants = function (bid) {
 
 // Tile a texture across a chunk-sized context, aligned to the global tile grid so
 // the pattern is continuous across chunks.
-FAB.Game.prototype._tileFill = function (dctx, id, cs) {
+FAB.Game.prototype._tileFill = function (dctx, id, cs, span, ox, oy) {
   var img = FAB.Assets.imgs[id];
   if (!img) return;
-  var span = FAB.TILE * 2; // each copy covers 2x2 tiles, so the pattern repeats less often
-  for (var yy = 0; yy < cs; yy += span) for (var xx = 0; xx < cs; xx += span)
+  span = span || FAB.TILE * 2;
+  ox = ox || 0; oy = oy || 0;
+  // align tiling to WORLD space (offset by the chunk's world origin) so the pattern
+  // is continuous across chunk borders even for spans that don't divide the chunk.
+  var sx = -(((ox % span) + span) % span), sy = -(((oy % span) + span) % span);
+  for (var yy = sy; yy < cs; yy += span) for (var xx = sx; xx < cs; xx += span)
     dctx.drawImage(img, 0, 0, img.width, img.height, xx, yy, span, span);
+};
+
+// Overlay a texture (tiled at `span`, world-aligned) revealed through soft, coarse
+// noise blobs. Used to (a) break the periodic grid by mixing in the SAME texture at
+// a different scale, and (b) blend in variant textures for diversity. Because the
+// reveal mask is a soft noise blend, there are no hard joins.
+FAB.Game.prototype._overlayTexture = function (lctx, id, cs, ox, oy, span, noiseOff) {
+  if (!FAB.Assets.imgs[id]) return;
+  if (!this._varNoise) this._varNoise = FAB.makeNoise(this.seed + ':variant');
+  var T = FAB.TILE, GV = 32;
+  var v = this._scratch('ovl', cs, cs), vc = v.getContext('2d');
+  vc.globalCompositeOperation = 'source-over'; vc.clearRect(0, 0, cs, cs);
+  this._tileFill(vc, id, cs, span, ox, oy);
+  var bm = this._scratch('ovlBlob', GV, GV), bmc = bm.getContext('2d'), bmi = bmc.createImageData(GV, GV);
+  for (var r = 0; r < GV; r++) for (var s = 0; s < GV; s++) {
+    var nx = (ox + (s + 0.5) * cs / GV) / T, ny = (oy + (r + 0.5) * cs / GV) / T;
+    var nv = this._varNoise(nx * 0.16 + noiseOff, ny * 0.16 + noiseOff);
+    bmi.data[(r * GV + s) * 4 + 3] = Math.round(FAB.clamp((nv - 0.46) / 0.16, 0, 1) * 255);
+  }
+  bmc.putImageData(bmi, 0, 0);
+  vc.globalCompositeOperation = 'destination-in'; vc.imageSmoothingEnabled = true;
+  vc.drawImage(bm, 0, 0, GV, GV, 0, 0, cs, cs);
+  lctx.drawImage(v, 0, 0);
 };
 
 // Bake one terrain chunk:
@@ -299,22 +326,29 @@ FAB.Game.prototype.getTerrainChunk = function (ccx, ccy) {
   if (cached && cached._texVer === ver) return cached;
 
   var self = this, w = this.world, T = FAB.TILE, CH = FAB.CHUNK, cs = CH * T;
-  var STEP = 4, G = cs / STEP;                 // field resolution: one sample / 4px
+  var STEP = 2, G = cs / STEP;                 // field resolution: one sample / 2px (fine curves)
+  var FEATHER = 12;                            // px width of the soft cross-fade between biomes
+  var PADC = Math.ceil(FEATHER / STEP) + 2;    // field padding (cells) so the blur has neighbour data
+  var GP = G + 2 * PADC;                        // padded field size
   if (!this._biomeIds) { this._biomeIds = Object.keys(FAB.BIOMES); this._biomeRGB = {}; for (var k in FAB.BIOMES) this._biomeRGB[k] = FAB.hex2rgb(FAB.BIOMES[k].ground); }
   if (!this._varNoise) this._varNoise = FAB.makeNoise(this.seed + ':variant');
 
-  // 1) warped biome field (G x G) + which biomes appear here
-  var field = new Array(G * G), present = {};
-  for (var gj = 0; gj < G; gj++) for (var gi = 0; gi < G; gi++) {
-    var tileX = (ccx * cs + gi * STEP + STEP / 2) / T, tileY = (ccy * cs + gj * STEP + STEP / 2) / T;
+  // 1) warped biome field, sampled with PADDING so the cross-fade blur near chunk
+  //    edges has real neighbour data (no seams). present = biomes in/bordering chunk.
+  var field = new Array(GP * GP), present = {};
+  for (var gj = 0; gj < GP; gj++) for (var gi = 0; gi < GP; gi++) {
+    var tileX = (ccx * cs + (gi - PADC) * STEP + STEP / 2) / T, tileY = (ccy * cs + (gj - PADC) * STEP + STEP / 2) / T;
     var bid = w.biomeAtFine(tileX, tileY);
-    field[gj * G + gi] = bid; present[bid] = true;
+    field[gj * GP + gi] = bid; present[bid] = true;
   }
 
-  // 2) smooth colour base from the field (curved boundaries, only ~4px soft)
+  // 2) smooth colour base from the central field cells
   var base = this._scratch('fieldSmall', G, G), bctx = base.getContext('2d');
   var bimg = bctx.createImageData(G, G);
-  for (var p = 0; p < field.length; p++) { var c = this._biomeRGB[field[p]], o = p * 4; bimg.data[o] = c[0]; bimg.data[o + 1] = c[1]; bimg.data[o + 2] = c[2]; bimg.data[o + 3] = 255; }
+  for (var bj = 0; bj < G; bj++) for (var bi = 0; bi < G; bi++) {
+    var c = this._biomeRGB[field[(bj + PADC) * GP + (bi + PADC)]], o = (bj * G + bi) * 4;
+    bimg.data[o] = c[0]; bimg.data[o + 1] = c[1]; bimg.data[o + 2] = c[2]; bimg.data[o + 3] = 255;
+  }
   bctx.putImageData(bimg, 0, 0);
 
   var canvas = document.createElement('canvas'); canvas.width = cs; canvas.height = cs;
@@ -327,39 +361,36 @@ FAB.Game.prototype.getTerrainChunk = function (ccx, ccy) {
     var variants = self.tileVariants(bid);
     if (!variants.length) return;
 
-    // soft curved mask for this biome (G x G alpha -> upscaled)
-    var mask = self._scratch('maskSmall', G, G), mctx = mask.getContext('2d');
-    var mimg = mctx.createImageData(G, G);
+    // padded membership mask for this biome (blurred later for the cross-fade)
+    var mask = self._scratch('maskSmall', GP, GP), mctx = mask.getContext('2d');
+    var mimg = mctx.createImageData(GP, GP);
     for (var q = 0; q < field.length; q++) { mimg.data[q * 4 + 3] = field[q] === bid ? 255 : 0; }
     mctx.putImageData(mimg, 0, 0);
 
-    // build the biome's textured layer at full resolution
+    // build the biome's textured layer
     var layer = self._scratch('layer', cs, cs), lctx = layer.getContext('2d');
     lctx.globalCompositeOperation = 'source-over'; lctx.clearRect(0, 0, cs, cs);
-    self._tileFill(lctx, variants[0], cs);
-    // blend each extra variant in soft low-frequency blobs (noise uses world coords,
-    // so blobs are continuous across chunk borders -> no seams), for diversity.
-    for (var vi = 1; vi < variants.length; vi++) {
-      var v2 = self._scratch('v2', cs, cs), v2c = v2.getContext('2d');
-      v2c.globalCompositeOperation = 'source-over'; v2c.clearRect(0, 0, cs, cs);
-      self._tileFill(v2c, variants[vi], cs);
-      var bm = self._scratch('blobSmall', G, G), bmc = bm.getContext('2d'), bmi = bmc.createImageData(G, G), off = vi * 31.7;
-      for (var r2 = 0; r2 < G; r2++) for (var s2 = 0; s2 < G; s2++) {
-        var nx = (ccx * cs + s2 * STEP) / T, ny = (ccy * cs + r2 * STEP) / T;
-        var nv = self._varNoise(nx * 0.16 + off, ny * 0.16 + off);
-        bmi.data[(r2 * G + s2) * 4 + 3] = Math.round(FAB.clamp((nv - 0.52) / 0.16, 0, 1) * 255);
-      }
-      bmc.putImageData(bmi, 0, 0);
-      v2c.globalCompositeOperation = 'destination-in';
-      v2c.imageSmoothingEnabled = true; v2c.drawImage(bm, 0, 0, G, G, 0, 0, cs, cs);
-      lctx.drawImage(v2, 0, 0);
-    }
-    // clip the layer to the curved biome mask, then stamp onto the chunk
+    var ox = ccx * cs, oy = ccy * cs;
+    self._tileFill(lctx, variants[0], cs, T * 2, ox, oy);                       // base tiling (2-tile span)
+    // break the periodic grid: mix in the SAME texture at TWO other scales, so
+    // features change size from patch to patch instead of repeating uniformly.
+    self._overlayTexture(lctx, variants[0], cs, ox, oy, Math.round(T * 5.0), 23.7);
+    self._overlayTexture(lctx, variants[0], cs, ox, oy, Math.round(T * 3.25), 7.3);
+    self._overlayTexture(lctx, variants[0], cs, ox, oy, Math.round(T * 1.4), 17.1);
+    // blend extra variant textures for colour/detail diversity
+    for (var vi = 1; vi < variants.length; vi++)
+      self._overlayTexture(lctx, variants[vi], cs, ox, oy, T * 2, vi * 31.7);
+    // clip the layer to the biome mask, BLURRED so the texture fades out gradually
+    // and overlaps the neighbouring biome -> a soft cross-fade instead of a hard edge
     lctx.globalCompositeOperation = 'destination-in';
     lctx.imageSmoothingEnabled = true; lctx.imageSmoothingQuality = 'high';
-    lctx.drawImage(mask, 0, 0, G, G, 0, 0, cs, cs);
+    lctx.filter = 'blur(' + FEATHER + 'px)';
+    lctx.drawImage(mask, 0, 0, GP, GP, -PADC * STEP, -PADC * STEP, GP * STEP, GP * STEP);
+    lctx.filter = 'none';
     lctx.globalCompositeOperation = 'source-over';
-    cx.drawImage(layer, 0, 0);
+    // slightly translucent so the smooth colour base shows through a touch — mutes
+    // any residual tiling grid into gentle detail instead of a hard pattern.
+    cx.save(); cx.globalAlpha = 0.82; cx.drawImage(layer, 0, 0); cx.restore();
   });
 
   // gentle grain so flat areas have life
