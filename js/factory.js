@@ -203,18 +203,30 @@ FAB.Factory.prototype.tick = function (game) {
     var src = self.at(e.x + b.x, e.y + b.y);
     var dst = self.at(e.x + f.x, e.y + f.y);
     if (!src || !dst) return;
-    // peek an item the destination will accept, then commit
+    // does the destination want this item right now?
+    function wants(item) {
+      if (dst.kind === 'box') return true;                       // boxes hold anything
+      if (dst.kind === 'belt') return self.beltHasRoomAtStart(dst);
+      return self.acceptsInput(dst, item);                       // crafter: only recipe items, not over-stocked
+    }
+    // pick the first item the destination actually wants, SKIPPING the rest
     var item = null;
-    if (src.kind === 'belt') { if (src.items.length) item = src.items[0].item; }
-    else if (src.kind === 'box') { for (var s in src.store) { item = s; break; } }
-    else if (src.kind === 'crafter' || src.kind === 'refinery') { for (var o in src.outBuf) { item = o; break; } }
-    if (!item) return;
-    var willTake = (dst.kind === 'box') || self.acceptsInput(dst, item) || (dst.kind === 'belt' && self.beltHasRoomAtStart(dst));
-    if (!willTake) return;
-    // grab from source
-    if (src.kind === 'belt') { src.items.sort(function (a, b) { return a.pos - b.pos; }); src.items.shift(); }
-    else if (src.kind === 'box') { src.store[item]--; if (!src.store[item]) delete src.store[item]; }
-    else { src.outBuf[item]--; if (!src.outBuf[item]) delete src.outBuf[item]; }
+    if (src.kind === 'belt') {
+      var bestIdx = -1, bestPos = -1;                            // grab the most-advanced wanted item
+      for (var ii = 0; ii < src.items.length; ii++) {
+        if (wants(src.items[ii].item) && src.items[ii].pos > bestPos) { bestPos = src.items[ii].pos; bestIdx = ii; }
+      }
+      if (bestIdx < 0) return;
+      item = src.items[bestIdx].item; src.items.splice(bestIdx, 1);
+    } else if (src.kind === 'box') {
+      for (var s in src.store) { if (src.store[s] > 0 && wants(s)) { item = s; break; } }
+      if (!item) return;
+      src.store[item]--; if (!src.store[item]) delete src.store[item];
+    } else if (src.kind === 'crafter' || src.kind === 'refinery') {
+      for (var o in src.outBuf) { if (src.outBuf[o] > 0 && wants(o)) { item = o; break; } }
+      if (!item) return;
+      src.outBuf[item]--; if (!src.outBuf[item]) delete src.outBuf[item];
+    } else return;
     // give to destination
     if (dst.kind === 'belt') self.dropOnBelt(dst, item); else self.insert(dst, item);
     e.carryItem = item;   // remembered so the render can animate it being carried across

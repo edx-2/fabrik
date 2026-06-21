@@ -113,7 +113,7 @@ FAB.MACHINES = {
   belt:        { name: 'Belt',         icon: '➡️', kind: 'belt',    color: '#42454d', rotates: true,  unlock: 2 },
   grabber:     { name: 'Grabber Arm',  icon: '🦾', kind: 'arm',     color: '#c9a13b', rotates: true,  unlock: 2 },
   box:         { name: 'Storage Box',  icon: '📦', kind: 'box',     color: '#9a7b46', unlock: 2 },
-  assembler:   { name: 'Assembler',    icon: '🔧', kind: 'crafter', color: '#3b6ea5', inputs: 5, unlock: 3 },
+  assembler:   { name: 'Assembler',    icon: '🔧', kind: 'crafter', color: '#3b6ea5', inputs: 5, unlock: 3, size: 2 },
   crusher:     { name: 'Crusher',      icon: '🪨', kind: 'crafter', color: '#7a7066', inputs: 1, unlock: 3 },
   sawmill:     { name: 'Sawmill',      icon: '🪚', kind: 'crafter', color: '#9c6b35', inputs: 1, unlock: 3 },
   pump:        { name: 'Oil Pump',     icon: '⛽', kind: 'pump',    color: '#445', rotates: true, unlock: 4 },
