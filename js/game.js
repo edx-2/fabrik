@@ -85,8 +85,16 @@ FAB.Game.prototype.spawnCar = function (factoryEnt) {
   // scatter multiple cars a little so they do not stack exactly
   px += (this.cars.length % 3) * 26 - 26;
   this.cars.push(new FAB.Car(px, py, factoryEnt.carColor, factoryEnt.carKind));
-  this.toast('🚗 A ' + factoryEnt.carColor + ' car is ready! Press E to drive.');
-  this.celebrate = 1.5;
+  // only celebrate the FIRST car of each kind+colour; later identical cars just appear
+  var key = factoryEnt.carKind + ':' + factoryEnt.carColor;
+  this.stats.carVariants = this.stats.carVariants || {};
+  if (!this.stats.carVariants[key]) {
+    this.stats.carVariants[key] = true;
+    var kindName = { basic: 'car', sporty: 'sporty car', super: 'super car' }[factoryEnt.carKind] || 'car';
+    this.toast('🚗 First ' + factoryEnt.carColor + ' ' + kindName + '! Press E to drive.');
+    FAB.sfx('car_ready');
+    this.celebrate = 1.5;
+  }
 };
 
 // ---------------------------------------------------------------- milestones
@@ -101,6 +109,7 @@ FAB.Game.prototype.checkMilestone = function () {
     this.rebuildHotbar();
     this.celebrate = 2.5;
     this.toast('🎉 Milestone ' + m.n + ' complete: ' + m.title + '!');
+    FAB.sfx('milestone');
     FAB.Save.save(this);
   }
 };
@@ -136,16 +145,24 @@ FAB.Game.prototype.update = function (dt) {
 
   this.checkMilestone();
 
+  // gentle conveyor hum while any belts exist
+  this._beltCheckT = (this._beltCheckT || 0) + dt;
+  if (this._beltCheckT > 0.6) {
+    this._beltCheckT = 0; var hasBelt = false;
+    this.factory.eachEntity(function (e) { if (e.kind === 'belt' || e.kind === 'cross') hasBelt = true; });
+    if (hasBelt) FAB.sfxLoop('belt_loop'); else FAB.sfxStop('belt_loop');
+  }
+
   // autosave every ~10s
   this._saveT = (this._saveT || 0) + dt;
   if (this._saveT > 10) { this._saveT = 0; FAB.Save.save(this); }
 };
 
 FAB.Game.prototype.toggleDrive = function () {
-  if (this.driving) { this.player.x = this.driving.x; this.player.y = this.driving.y + 8; this.driving = null; this.toast('Got out of the car.'); return; }
+  if (this.driving) { this.player.x = this.driving.x; this.player.y = this.driving.y + 8; this.driving = null; this.toast('Got out of the car.'); FAB.sfxStop('drive_loop'); return; }
   var best = null, bd = 70 * 70;
   for (var i = 0; i < this.cars.length; i++) { var d = FAB.dist2(this.player.x, this.player.y, this.cars[i].x, this.cars[i].y); if (d < bd) { bd = d; best = this.cars[i]; } }
-  if (best) { this.driving = best; this.toast('Vroom! Arrows to drive' + (best.hasGrappler ? ', F = grappler' : '') + '. E to get out.'); }
+  if (best) { this.driving = best; this.toast('Vroom! Arrows to drive' + (best.hasGrappler ? ', F = grappler' : '') + '. E to get out.'); FAB.sfxLoop('drive_loop'); }
 };
 
 // ---------------------------------------------------------------- build / interact
@@ -212,8 +229,10 @@ FAB.Game.prototype.placeLine = function (x, y, dir) {
   if (!this.unlocked[t]) return;
   var existing = this.factory.at(x, y);
   if (existing) { if (existing.type === t && existing.kind === 'belt') existing.dir = dir; return; }
-  if (this.factory.canPlace(t, x, y, this.world))
+  if (this.factory.canPlace(t, x, y, this.world)) {
     this.factory.place(t, x, y, FAB.MACHINES[t].rotates ? dir : 0, this.world);
+    FAB.sfx('place', { minGap: 70, volume: 0.4, rate: 1.05 }); // soft rhythmic tick while dragging
+  }
 };
 FAB.Game.prototype.orientBelt = function (x, y, dir) {
   var e = this.factory.at(x, y);
@@ -223,13 +242,14 @@ FAB.Game.prototype.orientBelt = function (x, y, dir) {
 FAB.Game.prototype.placeAt = function (x, y) {
   if (!this.buildType) return;
   if (!this.unlocked[this.buildType]) return;
-  if (!this.factory.canPlace(this.buildType, x, y, this.world)) { this.toast('Can\'t build there'); return; }
+  if (!this.factory.canPlace(this.buildType, x, y, this.world)) { this.toast('Can\'t build there'); FAB.sfx('error', { minGap: 200 }); return; }
   var dir = FAB.MACHINES[this.buildType].rotates ? this.buildDir : 0;
   this.factory.place(this.buildType, x, y, dir, this.world);
+  FAB.sfx('place');
 };
 FAB.Game.prototype.removeAt = function (x, y) {
   var refunds = this.factory.remove(x, y);
-  if (refunds) { for (var it in refunds) if (FAB.ITEMS[it]) this.player.give(it, refunds[it]); }
+  if (refunds) { for (var it in refunds) if (FAB.ITEMS[it]) this.player.give(it, refunds[it]); FAB.sfx('remove'); }
 };
 
 // ---------------------------------------------------------------- save/load

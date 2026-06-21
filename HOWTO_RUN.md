@@ -64,3 +64,17 @@ python generate_assets.py --all           # everything
 ```
 
 Reload the page and the generated art replaces the placeholders automatically.
+
+## Add sound (optional): generate SFX with ElevenLabs
+
+See **`assets/SFX_README.md`**. In short:
+
+```bash
+cd assets
+export ELEVENLABS_API_KEY="your-key"      # PowerShell: $env:ELEVENLABS_API_KEY="..."
+python generate_sfx.py --sfx milestone    # one sound
+python generate_sfx.py --all              # all sounds
+```
+
+Reload and the sounds play on game events (there's a 🔊 mute button in-game).
+Until generated, the game just runs silently.

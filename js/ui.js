@@ -19,6 +19,7 @@ FAB.UI = {
   boot: function (canvas) {
     this.canvas = canvas;
     FAB.Assets.init();
+    if (FAB.Audio) FAB.Audio.init();
     this.buildOverlay();
     this.showTitle();
   },
@@ -43,16 +44,22 @@ FAB.UI = {
       '<button id="btnTech">📖 Tech (O)</button>' +
       '<button id="btnBag">🎒 Bag (Tab)</button>' +
       '<button id="btnHelp">🤖 Help (H)</button>' +
+      '<button id="btnMute" title="Sound on/off"></button>' +
       '<button id="btnMenu">⏸️ Menu</button>';
-    this.el.buttons.querySelector('#btnBuild').onclick = function () { self.toggleBuildMenu(); };
-    this.el.buttons.querySelector('#btnTech').onclick = function () { self.toggleTech(); };
-    this.el.buttons.querySelector('#btnBag').onclick = function () { self.toggleBag(); };
-    this.el.buttons.querySelector('#btnHelp').onclick = function () { self.help(); };
-    this.el.buttons.querySelector('#btnMenu').onclick = function () { self.showTitle(); };
+    function bind(id, fn) { self.el.buttons.querySelector(id).onclick = function () { FAB.sfx('click'); fn(); }; }
+    bind('#btnBuild', function () { self.toggleBuildMenu(); });
+    bind('#btnTech', function () { self.toggleTech(); });
+    bind('#btnBag', function () { self.toggleBag(); });
+    bind('#btnHelp', function () { self.help(); });
+    bind('#btnMenu', function () { self.showTitle(); });
+    var mute = this.el.buttons.querySelector('#btnMute');
+    mute.textContent = (FAB.Audio && FAB.Audio.muted) ? '🔇' : '🔊';
+    mute.onclick = function () { var m = FAB.Audio ? FAB.Audio.toggleMute() : true; mute.textContent = m ? '🔇' : '🔊'; if (!m) FAB.sfx('click'); };
   },
 
   // ---- title / world select ----------------------------------------------
   showTitle: function () {
+    FAB.sfxStop('ambient'); FAB.sfxStop('belt_loop'); FAB.sfxStop('drive_loop');
     if (this.game) { this.game.stop(); FAB.Save.save(this.game); }
     this.el.hud.classList.add('hidden');
     this.el.modal.classList.add('hidden');
@@ -95,6 +102,7 @@ FAB.UI = {
     this.el.hud.classList.remove('hidden');
     this.renderHotbar();
     this.game.start();
+    FAB.sfxLoop('ambient'); // background ambience (the New World click already unlocked audio)
   },
 
   // ---- hotbar -------------------------------------------------------------
@@ -234,6 +242,7 @@ FAB.UI = {
   },
 
   openModal: function (kind, html) {
+    FAB.sfx('open');
     this.el.modal.dataset.kind = kind;
     this.el.modal.innerHTML = '<div class="panel">' + html + '</div>';
     this.el.modal.classList.remove('hidden');
@@ -241,7 +250,7 @@ FAB.UI = {
     var c = this.el.modal.querySelector('.close'); if (c) c.onclick = function () { self.closeModal(); };
     this.el.modal.onclick = function (ev) { if (ev.target === self.el.modal) self.closeModal(); };
   },
-  closeModal: function () { this.el.modal.classList.add('hidden'); this.el.modal.innerHTML = ''; this.el.modal.dataset.kind = ''; },
+  closeModal: function () { FAB.sfx('close'); this.el.modal.classList.add('hidden'); this.el.modal.innerHTML = ''; this.el.modal.dataset.kind = ''; },
 
   // ---- inventory bag ------------------------------------------------------
   toggleBag: function () {

@@ -14,3 +14,5 @@ Thumbs.db
 # local screenshot tooling (not part of the game)
 /screenshot_harness.html
 /*.png
+
+assets/eleven_labs_api_key.txt

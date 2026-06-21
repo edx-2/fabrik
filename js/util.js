@@ -35,6 +35,11 @@ FAB.clamp = function (v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; };
 FAB.lerp = function (a, b, t) { return a + (b - a) * t; };
 // bouncy ease that overshoots near the end — great for playful "snap" motion
 FAB.easeOutBack = function (x) { var c1 = 2.2, c3 = c1 + 1; var p = x - 1; return 1 + c3 * p * p * p + c1 * p * p; };
+
+// audio helpers — safe no-ops when the audio manager isn't present (e.g. tests)
+FAB.sfx = function (id, opts) { if (FAB.Audio && FAB.Audio.play) FAB.Audio.play(id, opts); };
+FAB.sfxLoop = function (id, vol) { if (FAB.Audio && FAB.Audio.startLoop) FAB.Audio.startLoop(id, vol); };
+FAB.sfxStop = function (id) { if (FAB.Audio && FAB.Audio.stopLoop) FAB.Audio.stopLoop(id); };
 FAB.dist2 = function (ax, ay, bx, by) { var dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
 FAB.key = function (x, y) { return x + ',' + y; };
 // parse "#rrggbb" -> [r,g,b]

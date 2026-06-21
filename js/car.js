@@ -65,6 +65,6 @@ FAB.Car.prototype.toggleGrapple = function (game) {
     var d = FAB.dist2(this.x, this.y, p.x, p.y);
     if (d < bd) { bd = d; best = p; }
   }
-  if (best) { this.grab = best; game.toast('Grabbed! 🧲'); }
+  if (best) { this.grab = best; game.toast('Grabbed! 🧲'); FAB.sfx('grapple'); }
   else game.toast('Nothing to grab');
 };

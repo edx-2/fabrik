@@ -16,10 +16,15 @@
        It is loaded if present; otherwise the game uses built-in placeholder art. -->
   <script src="assets/generated/manifest.js" onerror="console.log('[fabrik] no generated assets yet — using placeholders')"></script>
 
+  <!-- Optional: generated sound-effects manifest. Created by assets/generate_sfx.py.
+       Loaded if present; otherwise the game runs silently. -->
+  <script src="assets/generated/sfx_manifest.js" onerror="console.log('[fabrik] no generated sfx yet — running silent')"></script>
+
   <!-- Game code (classic scripts so the game runs by double-clicking this file). -->
   <script src="js/util.js"></script>
   <script src="js/data.js"></script>
   <script src="js/assets.js"></script>
+  <script src="js/audio.js"></script>
   <script src="js/world.js"></script>
   <script src="js/factory.js"></script>
   <script src="js/player.js"></script>

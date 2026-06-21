@@ -316,7 +316,9 @@ FAB.Factory.prototype.finishCraft = function (e, r, game) {
     return;
   }
   e.outBuf[outItem] = (e.outBuf[outItem] || 0) + qty;
+  var firstEver = !game.stats.produced[outItem];   // the very first time you craft this product
   game.onProduced(outItem, qty);
+  if (firstEver) FAB.sfx('craft', { volume: 0.55 }); // once per product type, not for repeats
 };
 
 // nearest parking-lot entity to a position (for car delivery)

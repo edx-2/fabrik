@@ -57,6 +57,7 @@ FAB.Player.prototype.update = function (dt, game) {
         this.give(node.res, 1);
         game.onProduced(node.res, 1);
         game.toast('+1 ' + FAB.ITEMS[node.res].name);
+        FAB.sfx('mine'); FAB.sfx('pickup', { minGap: 120 });
       }
     } else { this.mineProgress = 0; }
   } else { this.mineProgress = 0; }
