@@ -22,6 +22,9 @@ FAB.Game = function (canvas, seed, saved) {
   this.driving = null;       // current Car being driven, or null
   this.acc = 0;              // tick accumulator
   this.celebrate = 0;
+  this.mapOpen = false;      // big map modal (toggled with M); hidden by default
+  this._mmBakeScale = 3;     // resolution the static map is baked at (px per tile)
+  this._mmRes = { iron_ore: '#aebfd6', copper_ore: '#e8853f', coal: '#1e1e26', stone: '#efe6c8', wood: '#7a4a22', crude_oil: '#2e2038' };
 
   var spawnTX = (this.world.w / 2) | 0, spawnTY = (this.world.h / 2) | 0;
   this.player = new FAB.Player(spawnTX, spawnTY);
@@ -105,11 +108,16 @@ FAB.Game.prototype.checkMilestone = function () {
 // ---------------------------------------------------------------- update
 FAB.Game.prototype.update = function (dt) {
   dt = Math.min(dt, 0.05);
-  // enter / exit car
-  if (this.input.pressed('enter')) this.toggleDrive();
+  // big map modal: M toggles, Esc closes; it pauses building/movement but the
+  // factory keeps running underneath.
+  if (this.input.pressed('map')) this.mapOpen = !this.mapOpen;
+  if (this.mapOpen && this.input.pressed('menu')) this.mapOpen = false;
 
-  if (this.driving) this.driving.update(dt, this);
-  else { this.player.update(dt, this); this.handleBuild(); }
+  if (!this.mapOpen) {
+    if (this.input.pressed('enter')) this.toggleDrive();
+    if (this.driving) this.driving.update(dt, this);
+    else { this.player.update(dt, this); this.handleBuild(); }
+  }
 
   // factory ticks at fixed rate
   this.acc += dt;
@@ -300,6 +308,9 @@ FAB.Game.prototype.render = function () {
 
   // celebrate confetti
   if (this.celebrate > 0) this.drawConfetti(ctx);
+
+  // big map modal (resource finder)
+  if (this.mapOpen) this.drawBigMap(ctx);
 };
 
 // ---------------------------------------------------------------- smooth terrain
@@ -452,9 +463,18 @@ FAB.Game.prototype.getTerrainChunk = function (ccx, ccy) {
 
 FAB.Game.prototype.drawNode = function (ctx, node, sx, sy) {
   var T = FAB.TILE, it = FAB.ITEMS[node.res];
-  ctx.fillStyle = it.color; FAB.roundRect(ctx, sx + 3, sy + 3, T - 6, T - 6, 6); ctx.fill();
-  ctx.font = '16px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(it.icon, sx + T / 2, sy + T / 2 + 1);
+  ctx.save();
+  // soft round backing so a patch reads as a deposit (circles blend in clusters)
+  ctx.globalAlpha = 0.3; ctx.fillStyle = it.color;
+  ctx.beginPath(); ctx.arc(sx + T / 2, sy + T / 2, T * 0.46, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = 1;
+  // the SAME generated item image used in menus and on belts, for consistency
+  if (!FAB.Assets.draw(ctx, 'item_' + node.res, sx + 4, sy + 4, T - 8, T - 8, 0)) {
+    ctx.fillStyle = it.color; FAB.roundRect(ctx, sx + 3, sy + 3, T - 6, T - 6, 6); ctx.fill();
+    ctx.font = '16px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(it.icon, sx + T / 2, sy + T / 2 + 1);
+  }
+  ctx.restore();
 };
 
 FAB.Game.prototype.drawEntity = function (ctx, e) {
@@ -477,13 +497,18 @@ FAB.Game.prototype.drawEntity = function (ctx, e) {
     ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(sx + 4, sy + sz - 7, sz - 8, 4);
     ctx.fillStyle = '#7be37b'; ctx.fillRect(sx + 4, sy + sz - 7, (sz - 8) * p, 4);
   }
-  // recipe icon badge for crafters
+  // "what this machine makes" badge: a clear rounded chip with the output's image
   if ((e.kind === 'crafter' || e.kind === 'refinery') && e.recipe) {
-    var out = FAB.RECIPES[e.recipe]; var oi = (out.out && typeof out.out === 'string') ? out.out : e.recipe;
-    var icon = oi === 'car' ? '🚗' : (FAB.ITEMS[oi] ? FAB.ITEMS[oi].icon : '?');
-    ctx.font = '12px serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(sx + 2, sy + 2, 14, 14);
-    ctx.fillText(icon, sx + 3, sy + 3);
+    var out = FAB.RECIPES[e.recipe], oi = (out.out && typeof out.out === 'string') ? out.out : e.recipe;
+    var bs = Math.round(Math.min(22, sz * 0.5)), bx = sx + 3, by = sy + 3;
+    FAB.roundRect(ctx, bx, by, bs, bs, 5);
+    ctx.fillStyle = 'rgba(255,255,255,0.94)'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.stroke();
+    var aid = oi === 'car' ? ('car_' + (out.carKind || 'basic')) : ('item_' + oi);
+    if (!FAB.Assets.draw(ctx, aid, bx + 2, by + 2, bs - 4, bs - 4, 0)) {
+      ctx.font = Math.floor(bs * 0.66) + 'px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#222'; ctx.fillText(oi === 'car' ? '🚗' : (FAB.ITEMS[oi] ? FAB.ITEMS[oi].icon : '?'), bx + bs / 2, by + bs / 2 + 1);
+    }
   }
 };
 
@@ -765,6 +790,77 @@ FAB.Game.prototype.drawGhost = function (ctx) {
   ctx.save(); ctx.globalAlpha = 0.55;
   FAB.Placeholder.box(ctx, sx, sy, sz, sz, ok ? '#7be37b' : '#e06b6b', FAB.MACHINES[this.buildType].icon);
   if (FAB.MACHINES[this.buildType].rotates) this.drawDirArrow(ctx, { dir: this.buildDir }, sx, sy, sz);
+  ctx.restore();
+};
+
+// ---------------------------------------------------------------- minimap
+FAB.Game.prototype._isDark = function (hex) {
+  var c = FAB.hex2rgb(hex); return (c[0] * 0.299 + c[1] * 0.587 + c[2] * 0.114) < 110;
+};
+// bake biomes + resource deposits once (static), at a crisp resolution
+FAB.Game.prototype.bakeMinimap = function () {
+  var w = this.world, s = this._mmBakeScale, mw = Math.round(w.w * s), mh = Math.round(w.h * s);
+  var c = document.createElement('canvas'); c.width = mw; c.height = mh; var x = c.getContext('2d');
+  for (var ty = 0; ty < w.h; ty++) for (var tx = 0; tx < w.w; tx++) {
+    x.fillStyle = FAB.BIOMES[w.biomeAt(tx, ty)].ground;
+    x.fillRect(Math.floor(tx * s), Math.floor(ty * s), Math.ceil(s) + 1, Math.ceil(s) + 1);
+  }
+  for (var k in w.nodes) {
+    var n = w.nodes[k], p = k.split(',').map(Number), col = this._mmRes[n.res] || '#fff';
+    var mx = (p[0] + 0.5) * s, my = (p[1] + 0.5) * s;
+    x.fillStyle = this._isDark(col) ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.55)';
+    x.beginPath(); x.arc(mx, my, s * 0.9, 0, 6.283); x.fill();
+    x.fillStyle = col; x.beginPath(); x.arc(mx, my, s * 0.6, 0, 6.283); x.fill();
+  }
+  this._mmBase = c; this._mmW = mw; this._mmH = mh;
+};
+// big centered map modal (resource finder)
+FAB.Game.prototype.drawBigMap = function (ctx) {
+  if (typeof document === 'undefined') return;
+  if (!this._mmBase) this.bakeMinimap();
+  var w = this.world, cw = ctx.canvas.width, ch = ctx.canvas.height, self = this;
+  var pad = 14, titleH = 28, legendH = 30;
+  var disp = Math.min((cw - 90) / w.w, (ch - 100 - titleH - legendH) / w.h);
+  var mapW = Math.round(w.w * disp), mapH = Math.round(w.h * disp);
+  var panelW = mapW + pad * 2, panelH = mapH + pad * 2 + titleH + legendH;
+  var panelX = Math.round((cw - panelW) / 2), panelY = Math.round((ch - panelH) / 2);
+  var mapX = panelX + pad, mapY = panelY + pad + titleH;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, cw, ch);            // dim backdrop
+  FAB.roundRect(ctx, panelX, panelY, panelW, panelH, 14);
+  ctx.fillStyle = 'rgba(14,28,44,0.97)'; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = '#3a5d85'; ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('🗺️ Map', panelX + pad, panelY + 7);
+  ctx.fillStyle = '#9fb6cf'; ctx.font = '13px sans-serif'; ctx.textAlign = 'right';
+  ctx.fillText('press M or Esc to close', panelX + panelW - pad, panelY + 10);
+
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(this._mmBase, mapX, mapY, mapW, mapH);
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.strokeRect(mapX, mapY, mapW, mapH);
+
+  // machines, cars, and you
+  this.factory.eachEntity(function (e) { ctx.fillStyle = 'rgba(180,210,240,0.9)'; ctx.fillRect(mapX + e.x * disp - 1, mapY + e.y * disp - 1, 2, 2); });
+  this.cars.forEach(function (c) { ctx.fillStyle = '#fff'; ctx.fillRect(mapX + (c.x / FAB.TILE) * disp - 1.5, mapY + (c.y / FAB.TILE) * disp - 1.5, 3, 3); });
+  var foc = this.driving || this.player, fx = mapX + (foc.x / FAB.TILE) * disp, fy = mapY + (foc.y / FAB.TILE) * disp;
+  var pulse = 4 + Math.sin(Date.now() / 250) * 1.2;
+  ctx.beginPath(); ctx.arc(fx, fy, pulse, 0, 6.283); ctx.fillStyle = '#ffe27a'; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = '#000'; ctx.stroke();
+  ctx.fillStyle = '#ffe27a'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText('you', fx + 8, fy);
+
+  // legend: 6 resources across one row
+  var names = { iron_ore: 'Iron', copper_ore: 'Copper', coal: 'Coal', stone: 'Stone', wood: 'Logs', crude_oil: 'Oil' };
+  var res = ['iron_ore', 'copper_ore', 'coal', 'stone', 'wood', 'crude_oil'], gap = mapW / 6;
+  var ly = mapY + mapH + pad + 4;
+  ctx.font = '13px sans-serif'; ctx.textBaseline = 'middle';
+  res.forEach(function (r, i) {
+    var cxp = mapX + i * gap;
+    ctx.fillStyle = self._mmRes[r]; ctx.beginPath(); ctx.arc(cxp + 6, ly, 4, 0, 6.283); ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.stroke();
+    ctx.fillStyle = '#cfe0f2'; ctx.textAlign = 'left'; ctx.fillText(names[r], cxp + 15, ly);
+  });
   ctx.restore();
 };
 
