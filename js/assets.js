@@ -31,6 +31,9 @@ FAB.Assets = {
 
   has: function (id) { return !!this.ready[id]; },
 
+  // path to a generated asset (for DOM <img> use), or null if not in the manifest
+  url: function (id) { var d = this.defs[id]; return d ? (this.base + d.file) : null; },
+
   // Draw a (possibly multi-frame sprite-sheet) asset into a destination box.
   // frame index selects a cell when the def has cols/rows.
   draw: function (ctx, id, dx, dy, dw, dh, frame) {

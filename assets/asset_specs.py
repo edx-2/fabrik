@@ -180,6 +180,7 @@ _ITEMS = [
     ("coal", "a lump of coal", "A shiny black lump of coal."),
     ("stone", "a stone", "A smooth grey rounded stone."),
     ("wood", "a wooden log", "A short brown log with rings on the end."),
+    ("crude_oil", "a barrel of crude oil", "A dark metal oil barrel with a glossy black oil drip."),
     ("iron_plate", "an iron plate", "A flat shiny silver-grey metal plate."),
     ("copper_plate", "a copper plate", "A flat shiny orange-brown metal plate."),
     ("steel", "a steel ingot", "A solid dark-grey metal ingot."),

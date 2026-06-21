@@ -6,6 +6,15 @@ FAB.UI = {
   game: null,
   el: {},
 
+  // Icon HTML that matches the in-game art: use the generated image if available,
+  // otherwise fall back to the emoji. Keeps modal icons consistent with the map.
+  assetIcon: function (assetId, emoji) {
+    var u = FAB.Assets.url(assetId);
+    return u ? '<img class="ic-img" src="' + u + '" alt="">' : (emoji || '?');
+  },
+  itemIcon: function (id) { var it = FAB.ITEMS[id]; return this.assetIcon('item_' + id, it ? it.icon : '?'); },
+  machineIcon: function (t) { var m = FAB.MACHINES[t]; return this.assetIcon('machine_' + t, m ? m.icon : '?'); },
+
   // ---- boot: show the title / world-select screen -------------------------
   boot: function (canvas) {
     this.canvas = canvas;
@@ -94,7 +103,7 @@ FAB.UI = {
     g.hotbar.forEach(function (t, i) {
       var m = FAB.MACHINES[t];
       html += '<div class="slot" data-t="' + t + '"><span class="num">' + (i + 1) + '</span>' +
-        '<span class="ic">' + m.icon + '</span><span class="nm">' + m.name + '</span></div>';
+        '<span class="ic">' + FAB.UI.machineIcon(t) + '</span><span class="nm">' + m.name + '</span></div>';
     });
     this.el.hotbar.innerHTML = html;
     var self = this;
@@ -111,7 +120,7 @@ FAB.UI = {
     order.forEach(function (t) {
       var m = FAB.MACHINES[t], lk = !g.unlocked[t];
       html += '<div class="bitem' + (lk ? ' locked' : '') + '" data-t="' + t + '">' +
-        '<div class="ic">' + (lk ? '🔒' : m.icon) + '</div><div class="nm">' + m.name + '</div>' +
+        '<div class="ic">' + (lk ? '🔒' : FAB.UI.machineIcon(t)) + '</div><div class="nm">' + m.name + '</div>' +
         (lk ? '<div class="ms">Milestone ' + m.unlock + '</div>' : '<div class="ms">place it</div>') + '</div>';
     });
     html += '</div><button class="close">Close</button>';
@@ -134,7 +143,7 @@ FAB.UI = {
 
     function ings(r) {
       return r.inputs.map(function (i) {
-        return '<span class="ing">' + (FAB.ITEMS[i[0]] ? FAB.ITEMS[i[0]].icon : '?') + '<small>×' + i[1] + '</small></span>';
+        return '<span class="ing">' + FAB.UI.itemIcon(i[0]) + '<small>×' + i[1] + '</small></span>';
       }).join('<span class="plus">+</span>');
     }
     function badge(unlocked, ms) {
@@ -153,7 +162,7 @@ FAB.UI = {
       var ok = oil ? !!g.unlocked.pump : true; // solids can be hand-mined from the start
       var how = oil ? 'Oil Pump' : 'Drill / by hand';
       html += '<div class="bitem' + (ok ? '' : ' locked') + '">' +
-        '<div class="ic">' + it.icon + '</div><div class="nm">' + it.name + '</div>' +
+        '<div class="ic">' + FAB.UI.itemIcon(id) + '</div><div class="nm">' + it.name + '</div>' +
         '<div class="ms">🗺️ ' + biome + '<br>' + how + '</div></div>';
     });
     html += '</div>';
@@ -165,13 +174,13 @@ FAB.UI = {
 
     machines.forEach(function (mt) {
       var md = FAB.MACHINES[mt], unlocked = !!g.unlocked[mt];
-      html += '<h3 class="tech-h' + (unlocked ? '' : ' off') + '">' + md.icon + ' ' + md.name +
+      html += '<h3 class="tech-h' + (unlocked ? '' : ' off') + '"><span class="mh-ic">' + FAB.UI.machineIcon(mt) + '</span> ' + md.name +
         ' ' + badge(unlocked, md.unlock) + '</h3><div class="recipes">';
       FAB.recipesFor(mt).forEach(function (rid) {
         var r = FAB.RECIPES[rid];
         var outId = (r.out && typeof r.out === 'string') ? r.out : rid;
         var qty = (typeof r.out === 'number') ? r.out : 1;
-        var icon = outId === 'car' ? '🚗' : FAB.ITEMS[outId].icon;
+        var icon = outId === 'car' ? FAB.UI.assetIcon('car_' + (r.carKind || 'basic'), '🚗') : FAB.UI.itemIcon(outId);
         var name = outId === 'car' ? carName[rid] : FAB.ITEMS[outId].name;
         html += '<div class="recipe' + (unlocked ? '' : ' locked') + '">' +
           '<span class="ins">' + ings(r) + '</span>' +
@@ -195,9 +204,9 @@ FAB.UI = {
     recs.forEach(function (rid) {
       var r = FAB.RECIPES[rid];
       var outId = (r.out && typeof r.out === 'string') ? r.out : rid;
-      var icon = outId === 'car' ? '🚗' : FAB.ITEMS[outId].icon;
+      var icon = outId === 'car' ? FAB.UI.assetIcon('car_' + (r.carKind || 'basic'), '🚗') : FAB.UI.itemIcon(outId);
       var name = outId === 'car' ? ({ car_basic: 'Basic Car', car_sporty: 'Sporty Car', car_super: 'Super Car' }[rid]) : FAB.ITEMS[outId].name;
-      var ing = r.inputs.map(function (i) { return (FAB.ITEMS[i[0]].icon) + 'x' + i[1]; }).join(' ');
+      var ing = r.inputs.map(function (i) { return '<span class="ing">' + FAB.UI.itemIcon(i[0]) + '<small>×' + i[1] + '</small></span>'; }).join(' ');
       html += '<div class="bitem' + (e.recipe === rid ? ' sel' : '') + '" data-r="' + rid + '">' +
         '<div class="ic">' + icon + '</div><div class="nm">' + name + '</div><div class="ms">' + ing + '</div></div>';
     });
@@ -241,7 +250,7 @@ FAB.UI = {
     var keys = Object.keys(inv).filter(function (k) { return inv[k] > 0; });
     if (!keys.length) html += '<p>Empty — go mine some Iron! ⛏️</p>';
     keys.forEach(function (k) {
-      html += '<div class="bitem"><div class="ic">' + FAB.ITEMS[k].icon + '</div><div class="nm">' + FAB.ITEMS[k].name + '</div><div class="ms">x' + inv[k] + '</div></div>';
+      html += '<div class="bitem"><div class="ic">' + FAB.UI.itemIcon(k) + '</div><div class="nm">' + FAB.ITEMS[k].name + '</div><div class="ms">x' + inv[k] + '</div></div>';
     });
     html += '</div><button class="close">Close</button>';
     this.el.bag.innerHTML = '<div class="panel">' + html + '</div>';
