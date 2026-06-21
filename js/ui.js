@@ -258,6 +258,12 @@ FAB.UI = {
 
   // ---- per-frame HUD update ----------------------------------------------
   renderHUD: function (g) {
+    // Esc closes whatever dialog is open (modal panels or the backpack)
+    if (g.input.pressed('menu')) {
+      if (!this.el.modal.classList.contains('hidden')) this.closeModal();
+      else if (!this.el.bag.classList.contains('hidden')) this.el.bag.classList.add('hidden');
+    }
+
     // keyboard shortcuts that open DOM panels
     if (g.input.pressed('build')) this.toggleBuildMenu();
     if (g.input.pressed('tech')) this.toggleTech();
