@@ -38,7 +38,7 @@ FAB.Game.prototype.applyUnlocks = function (list) {
   var self = this; (list || []).forEach(function (t) { self.unlocked[t] = true; });
 };
 FAB.Game.prototype.rebuildHotbar = function () {
-  var order = ['drill', 'belt', 'grabber', 'furnace', 'assembler', 'crusher', 'sawmill', 'pump', 'pipe', 'refinery', 'box', 'car_factory', 'parking'];
+  var order = ['drill', 'belt', 'grabber', 'crossing', 'furnace', 'assembler', 'crusher', 'sawmill', 'pump', 'pipe', 'refinery', 'box', 'car_factory', 'parking'];
   this.hotbar = order.filter(function (t) { return this.unlocked[t]; }, this).slice(0, 9);
 };
 
@@ -240,6 +240,8 @@ FAB.Game.prototype.loadFrom = function (d) {
     e.recipe = s.recipe; e.inBuf = s.inBuf || {}; e.outBuf = s.outBuf || {};
     e.store = s.store || {}; e.carColor = s.carColor || 'red'; e.carKind = s.carKind || 'basic';
     if (s.items) e.items = s.items;
+    if (s.itemsH) e.itemsH = s.itemsH; if (s.itemsV) e.itemsV = s.itemsV;
+    if (s.dirH != null) e.dirH = s.dirH; if (s.dirV != null) e.dirV = s.dirV;
   });
   (d.cars || []).forEach(function (c) { var car = new FAB.Car(c.x, c.y, c.color, c.kind); car.angle = c.angle || -Math.PI / 2; self.cars.push(car); });
   this.seedProps((this.world.w / 2) | 0, (this.world.h / 2) | 0);
@@ -460,6 +462,7 @@ FAB.Game.prototype.drawEntity = function (ctx, e) {
   var def = FAB.MACHINES[e.type];
   if (e.kind === 'belt') { this.drawBeltBody(ctx, e); this.drawBeltItems(ctx, e); return; }
   if (e.kind === 'pipe') { this.drawPipe(ctx, e, sx, sy); return; }
+  if (e.kind === 'cross') { this.drawCross(ctx, e, sx, sy); return; }
   if (e.kind === 'arm') { this.drawArm(ctx, e, sx, sy); return; }
 
   // generic machine box
@@ -521,6 +524,42 @@ FAB.Game.prototype.drawPipe = function (ctx, e, sx, sy) {
   ctx.fillStyle = '#3f8a4e'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#26512f'; ctx.stroke();
   ctx.beginPath(); ctx.arc(cx, cy, Math.max(2, (W - 8) / 2), 0, Math.PI * 2);
   ctx.fillStyle = oil ? '#3b2b46' : '#5fae6e'; ctx.fill();
+  ctx.restore();
+};
+
+// Belt bridge: two perpendicular belt lanes on one tile. The vertical lane is
+// drawn as an overpass (with a shadow) over the horizontal one, so the two flows
+// visibly cross without mixing. Items on each lane ride independently.
+FAB.Game.prototype.drawCross = function (ctx, e, sx, sy) {
+  this.drawCrossLane(ctx, e, sx, sy, true);    // horizontal lane (underneath)
+  this.drawCrossLane(ctx, e, sx, sy, false);   // vertical lane (the overpass)
+};
+FAB.Game.prototype.drawCrossLane = function (ctx, e, sx, sy, horiz) {
+  var T = FAB.TILE, cx = sx + T / 2, cy = sy + T / 2, half = Math.round(T * 0.32);
+  var dirIdx = horiz ? (e.dirH || 1) : (e.dirV || 2), d = FAB.DIR[dirIdx];
+  var items = horiz ? (e.itemsH || []) : (e.itemsV || []);
+  var now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
+  ctx.save();
+  if (!horiz) { ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(cx - half - 2, sy + 1, (half + 2) * 2, T - 2); } // overpass shadow
+  var x0 = horiz ? sx : cx - half, y0 = horiz ? cy - half : sy, w = horiz ? T : half * 2, h = horiz ? half * 2 : T;
+  ctx.fillStyle = '#23262d'; ctx.fillRect(x0, y0, w, h);              // frame
+  ctx.fillStyle = '#34373e'; ctx.fillRect(x0 + 2, y0 + 2, w - 4, h - 4); // belt surface
+  // animated treads along the lane direction
+  ctx.strokeStyle = '#646b78'; ctx.lineWidth = 3;
+  for (var k = 0; k < 4; k++) {
+    var p = ((k / 4) + now * 1.35) % 1, px = cx + d.x * (p - 0.5) * T, py = cy + d.y * (p - 0.5) * T;
+    ctx.beginPath();
+    if (horiz) { ctx.moveTo(px, cy - half + 2); ctx.lineTo(px, cy + half - 2); }
+    else { ctx.moveTo(cx - half + 2, py); ctx.lineTo(cx + half - 2, py); }
+    ctx.stroke();
+  }
+  // items
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i], item = FAB.ITEMS[it.item];
+    var ix = cx + d.x * (it.pos - 0.5) * T, iy = cy + d.y * (it.pos - 0.5) * T;
+    if (!FAB.Assets.draw(ctx, 'item_' + it.item, ix - 9, iy - 9, 18, 18, 0))
+      FAB.Placeholder.token(ctx, ix, iy, 8, item.color, item.icon);
+  }
   ctx.restore();
 };
 

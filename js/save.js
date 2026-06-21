@@ -12,6 +12,9 @@ FAB.Save = {
           t: e.type, x: e.x, y: e.y, dir: e.dir, recipe: e.recipe,
           inBuf: e.inBuf, outBuf: e.outBuf, store: e.store,
           items: e.kind === 'belt' ? e.items : undefined,
+          itemsH: e.kind === 'cross' ? e.itemsH : undefined,
+          itemsV: e.kind === 'cross' ? e.itemsV : undefined,
+          dirH: e.dirH, dirV: e.dirV,
           carColor: e.carColor, carKind: e.carKind
         });
       });

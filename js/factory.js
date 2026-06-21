@@ -46,7 +46,8 @@ FAB.Factory.prototype.place = function (type, x, y, dir, world) {
     type: type, kind: def.kind, x: x, y: y, dir: dir || 0,
     size: this.footprint(type), recipe: null, progress: 0,
     inBuf: {}, outBuf: {}, store: {}, items: [], cooldown: 0,
-    carColor: 'red', carKind: 'basic', node: null, anim: 0
+    carColor: 'red', carKind: 'basic', node: null, anim: 0,
+    itemsH: [], itemsV: [], dirH: 1, dirV: 2   // belt-bridge lanes (cross)
   };
   if (def.kind === 'miner') { var n = world.nodeAt(x, y); e.recipe = null; e.res = n.res; }
   if (def.kind === 'crusher') e.recipe = 'sand';
@@ -67,7 +68,8 @@ FAB.Factory.prototype.remove = function (x, y) {
   var refunds = {};
   function add(o) { for (var it in o) refunds[it] = (refunds[it] || 0) + o[it]; }
   add(e.inBuf); add(e.outBuf); add(e.store);
-  if (e.items) e.items.forEach(function (t) { if (t.item !== 'crude_oil') refunds[t.item] = (refunds[t.item] || 0) + 1; });
+  function refundItems(list) { if (list) list.forEach(function (t) { if (t.item !== 'crude_oil') refunds[t.item] = (refunds[t.item] || 0) + 1; }); }
+  refundItems(e.items); refundItems(e.itemsH); refundItems(e.itemsV);
   for (var oy = 0; oy < e.size; oy++) for (var ox = 0; ox < e.size; ox++)
     delete this.owner[FAB.key(e.x + ox, e.y + oy)];
   delete this.ents[k];
@@ -111,6 +113,51 @@ FAB.Factory.prototype.dropOnBelt = function (belt, item) {
   if (!this.beltHasRoomAtStart(belt)) return false;
   belt.items.push({ item: item, pos: 0 });
   return true;
+};
+
+// ---- belt-bridge (crossing) helpers ---------------------------------------
+// A crossing has two lanes: horizontal (dirH = east/west) and vertical
+// (dirV = south/north). Each lane auto-orients to the belt feeding it.
+FAB.Factory.prototype.crossLaneDir = function (e, horiz) {
+  if (horiz) {
+    var wl = this.at(e.x - 1, e.y), er = this.at(e.x + 1, e.y);
+    if (wl && wl.kind === 'belt' && wl.dir === 1) return 1; // belt to the west flowing east
+    if (er && er.kind === 'belt' && er.dir === 3) return 3; // belt to the east flowing west
+    return e.dirH || 1;
+  }
+  var up = this.at(e.x, e.y - 1), dn = this.at(e.x, e.y + 1);
+  if (up && up.kind === 'belt' && up.dir === 2) return 2;   // belt above flowing south
+  if (dn && dn.kind === 'belt' && dn.dir === 0) return 0;   // belt below flowing north
+  return e.dirV || 2;
+};
+FAB.Factory.prototype.dropOnCross = function (cross, dirIdx, item) {
+  var horiz = (dirIdx === 1 || dirIdx === 3);
+  var laneDir = horiz ? cross.dirH : cross.dirV;
+  if (laneDir !== dirIdx) return false;                     // only accept items going the lane's way
+  var lane = horiz ? cross.itemsH : cross.itemsV;
+  for (var i = 0; i < lane.length; i++) if (lane[i].pos < BELT_GAP) return false;
+  lane.push({ item: item, pos: 0 });
+  return true;
+};
+
+// Advance one lane of items along dirIdx and hand the front one off at the end.
+// Shared by normal belts and both lanes of a crossing.
+FAB.Factory.prototype.advanceLane = function (items, x, y, dirIdx, game) {
+  items.sort(function (a, b) { return b.pos - a.pos; });
+  var dir = FAB.DIR[dirIdx];
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    var ahead = (i === 0) ? 1.0 : items[i - 1].pos - BELT_GAP;
+    var target = Math.min(1.0, it.pos + BELT_SPEED);
+    if (target > ahead) target = ahead;
+    it.pos = target;
+    if (it.pos >= 0.999 && i === 0) {
+      var ne = this.at(x + dir.x, y + dir.y);
+      if (ne && ne.kind === 'belt') { if (this.dropOnBelt(ne, it.item)) { items.shift(); i--; } }
+      else if (ne && ne.kind === 'cross') { if (this.dropOnCross(ne, dirIdx, it.item)) { items.shift(); i--; } }
+      else if (ne && (ne.kind === 'crafter' || ne.kind === 'box')) { if (this.insert(ne, it.item)) { items.shift(); i--; } }
+    }
+  }
 };
 
 // ---- pipe network ----------------------------------------------------------
@@ -161,24 +208,20 @@ FAB.Factory.prototype.tick = function (game) {
     e.anim++;
   });
 
-  // 2) belts advance items (front-most first)
+  // 2a) crossings: orient each lane to the belts feeding it (before items move)
   list.forEach(function (e) {
-    if (e.kind !== 'belt') return;
-    e.items.sort(function (a, b) { return b.pos - a.pos; });
-    var dir = FAB.DIR[e.dir];
-    for (var i = 0; i < e.items.length; i++) {
-      var it = e.items[i];
-      var ahead = (i === 0) ? 1.0 : e.items[i - 1].pos - BELT_GAP;
-      var target = Math.min(1.0, it.pos + BELT_SPEED);
-      if (target > ahead) target = ahead;
-      it.pos = target;
-      if (it.pos >= 0.999 && i === 0) {
-        // try to hand off to the next tile
-        var nx = e.x + dir.x, ny = e.y + dir.y, ne = self.at(nx, ny);
-        if (ne && ne.kind === 'belt') { if (self.dropOnBelt(ne, it.item)) { e.items.shift(); i--; } }
-        else if (ne && (ne.kind === 'crafter' || ne.kind === 'box')) { if (self.insert(ne, it.item)) { e.items.shift(); i--; } }
-      }
-    }
+    if (e.kind !== 'cross') return;
+    e.dirH = self.crossLaneDir(e, true);
+    e.dirV = self.crossLaneDir(e, false);
+    e.anim++;
+  });
+  // 2b) belts advance items along their direction
+  list.forEach(function (e) { if (e.kind === 'belt') self.advanceLane(e.items, e.x, e.y, e.dir, game); });
+  // 2c) crossings advance both independent lanes
+  list.forEach(function (e) {
+    if (e.kind !== 'cross') return;
+    self.advanceLane(e.itemsH, e.x, e.y, e.dirH, game);
+    self.advanceLane(e.itemsV, e.x, e.y, e.dirV, game);
   });
 
   // 3) miners produce onto belt/machine in front
