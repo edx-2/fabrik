@@ -459,10 +459,7 @@ FAB.Game.prototype.drawEntity = function (ctx, e) {
   var T = FAB.TILE, cam = this.cam, sx = e.x * T - cam.x, sy = e.y * T - cam.y, sz = e.size * T;
   var def = FAB.MACHINES[e.type];
   if (e.kind === 'belt') { this.drawBeltBody(ctx, e); this.drawBeltItems(ctx, e); return; }
-  if (e.kind === 'pipe') {
-    ctx.fillStyle = '#2f5e36'; FAB.roundRect(ctx, sx + 8, sy + 8, T - 16, T - 16, 4); ctx.fill();
-    ctx.strokeStyle = '#7fe0a0'; ctx.lineWidth = 3; ctx.stroke(); return;
-  }
+  if (e.kind === 'pipe') { this.drawPipe(ctx, e, sx, sy); return; }
   if (e.kind === 'arm') { this.drawArm(ctx, e, sx, sy); return; }
 
   // generic machine box
@@ -485,6 +482,46 @@ FAB.Game.prototype.drawEntity = function (ctx, e) {
     ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fillRect(sx + 2, sy + 2, 14, 14);
     ctx.fillText(icon, sx + 3, sy + 3);
   }
+};
+
+// Draw a pipe as a connected piece: a central hub plus an arm toward every
+// neighbour it links to (other pipes, pumps, refineries). Adjacent pipes' arms
+// meet flush at the shared edge, so a run reads as one continuous pipe. Oil in
+// the network shows as an animated flow inside.
+FAB.Game.prototype.drawPipe = function (ctx, e, sx, sy) {
+  var T = FAB.TILE, cx = sx + T / 2, cy = sy + T / 2, f = this.factory, W = 13;
+  var conn = [], edge = [[cx, sy], [sx + T, cy], [cx, sy + T], [sx, cy]]; // up,right,down,left
+  for (var d = 0; d < 4; d++) {
+    var n = f.at(e.x + FAB.DIR[d].x, e.y + FAB.DIR[d].y);
+    conn[d] = !!(n && (n.kind === 'pipe' || n.kind === 'pump' || n.kind === 'refinery'));
+  }
+  function arms() {
+    ctx.beginPath(); var drew = false;
+    for (var d = 0; d < 4; d++) if (conn[d]) { ctx.moveTo(cx, cy); ctx.lineTo(edge[d][0], edge[d][1]); drew = true; }
+    if (!drew) { ctx.moveTo(cx - 7, cy); ctx.lineTo(cx + 7, cy); } // isolated: short stub
+  }
+  // oil level for this pipe's connected group
+  var gi = f.cellGroup[FAB.key(e.x, e.y)], grp = (gi !== undefined) ? f.groups[gi] : null, oil = grp && grp.oil > 0;
+
+  ctx.save(); ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
+  arms(); ctx.lineWidth = W + 5; ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.stroke();   // shadow
+  arms(); ctx.lineWidth = W + 2; ctx.strokeStyle = '#26512f'; ctx.stroke();             // dark border
+  arms(); ctx.lineWidth = W; ctx.strokeStyle = '#3f8a4e'; ctx.stroke();                 // pipe body
+  arms(); ctx.lineWidth = W - 6;                                                        // inner core
+  if (oil) {
+    ctx.strokeStyle = '#3b2b46'; ctx.stroke();
+    var now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
+    arms(); ctx.lineWidth = W - 8; ctx.strokeStyle = 'rgba(190,160,220,0.75)';
+    ctx.setLineDash([4, 8]); ctx.lineDashOffset = -(now * 18) % 12; ctx.stroke(); ctx.setLineDash([]);
+  } else { ctx.strokeStyle = '#5fae6e'; ctx.stroke(); }
+  arms(); ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.stroke();  // top sheen
+
+  // central hub + bolt
+  ctx.beginPath(); ctx.arc(cx, cy, W / 2 + 2, 0, Math.PI * 2);
+  ctx.fillStyle = '#3f8a4e'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#26512f'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, Math.max(2, (W - 8) / 2), 0, Math.PI * 2);
+  ctx.fillStyle = oil ? '#3b2b46' : '#5fae6e'; ctx.fill();
+  ctx.restore();
 };
 
 FAB.Game.prototype.drawDirArrow = function (ctx, e, sx, sy, sz) {
