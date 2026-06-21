@@ -158,15 +158,58 @@ FAB.Game.prototype.handleBuild = function () {
   // remove with X or right-click
   if ((inp.pressed('remove') || inp.mouse.clickR)) this.removeAt(mt.x, mt.y);
 
-  // left click: place, or interact with existing machine
+  // belts & pipes can be click-and-DRAGGED to draw long runs
+  var draggable = this.buildType === 'belt' || this.buildType === 'pipe';
+
   if (inp.mouse.clickL) {
-    if (this.buildType) this.placeAt(mt.x, mt.y);
-    else {
+    if (this.buildType && draggable) {
+      this.dragType = this.buildType; this.dragging = true; this.dragLast = { x: mt.x, y: mt.y };
+      this.placeLine(mt.x, mt.y, this.buildDir);
+    } else if (this.buildType) {
+      this.placeAt(mt.x, mt.y);
+    } else {
       var e = this.factory.at(mt.x, mt.y);
       if (e && (e.kind === 'crafter' || e.kind === 'refinery')) FAB.UI.openRecipe(this, e);
     }
   }
-  if (inp.pressed('menu')) this.buildType = null;
+
+  // continue / end an in-progress drag
+  if (this.dragging) {
+    if (!inp.mouse.downL || !draggable) this.dragging = false;
+    else if (mt.x !== this.dragLast.x || mt.y !== this.dragLast.y) this.dragDraw(mt.x, mt.y);
+  }
+
+  if (inp.pressed('menu')) { this.buildType = null; this.dragging = false; }
+};
+
+// Walk from the last dragged tile to the mouse tile one step at a time, laying a
+// belt/pipe in each cell and orienting belts to flow along the drag (corners too).
+FAB.Game.prototype.dragDraw = function (tx, ty) {
+  var cur = this.dragLast, guard = 0;
+  while ((cur.x !== tx || cur.y !== ty) && guard++ < 500) {
+    var dx = tx - cur.x, dy = ty - cur.y, dir;
+    if (Math.abs(dx) >= Math.abs(dy)) dir = dx > 0 ? 1 : 3; else dir = dy > 0 ? 2 : 0;
+    var d = FAB.DIR[dir], nx = cur.x + d.x, ny = cur.y + d.y;
+    this.orientBelt(cur.x, cur.y, dir);    // the tile we leave flows toward the next
+    this.placeLine(nx, ny, dir);
+    this.buildDir = dir;
+    cur = { x: nx, y: ny };
+  }
+  this.dragLast = cur;
+};
+
+// place a single belt/pipe of the drag type, or just re-orient one already there
+FAB.Game.prototype.placeLine = function (x, y, dir) {
+  var t = this.dragType;
+  if (!this.unlocked[t]) return;
+  var existing = this.factory.at(x, y);
+  if (existing) { if (existing.type === t && existing.kind === 'belt') existing.dir = dir; return; }
+  if (this.factory.canPlace(t, x, y, this.world))
+    this.factory.place(t, x, y, FAB.MACHINES[t].rotates ? dir : 0, this.world);
+};
+FAB.Game.prototype.orientBelt = function (x, y, dir) {
+  var e = this.factory.at(x, y);
+  if (e && e.type === this.dragType && e.kind === 'belt') e.dir = dir;
 };
 
 FAB.Game.prototype.placeAt = function (x, y) {

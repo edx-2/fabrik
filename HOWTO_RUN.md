@@ -29,6 +29,7 @@ you generate any pictures.
 | **Build menu** | B (or the 🧰 button) |
 | **Pick a machine to place** | number keys 1–9, or click the hotbar |
 | **Place machine** | left-click on the map |
+| **Draw belts/pipes** | click **and drag** to lay a whole line (belts auto-turn at corners) |
 | **Rotate** belt/drill/arm/pump | R (or mouse wheel) |
 | **Remove** a machine (refunds its contents) | X or right-click |
 | **Set a machine's recipe / car colour** | click the machine |
