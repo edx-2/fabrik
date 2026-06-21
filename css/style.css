@@ -72,6 +72,27 @@ button:active { transform: translateY(2px); box-shadow: 0 1px 0 #c79a14; }
 .bitem .ms { font-size: 12px; color: #9fb6cf; }
 .panel .close { margin-top: 16px; }
 
+/* ---- tech tree / recipe book ---- */
+.legend { font-size: 13px; color: #bcd0e6; margin: 0 0 10px; }
+.tech-h { display: flex; align-items: center; gap: 8px; margin: 16px 0 6px; font-size: 19px;
+  border-bottom: 2px solid #2f4d6f; padding-bottom: 4px; }
+.tech-h.off { color: #8aa0b8; }
+.av { font-size: 12px; font-weight: 700; border-radius: 8px; padding: 2px 7px; white-space: nowrap; }
+.av.ok { background: #1e4d2b; color: #8ef0a8; }
+.av.lk { background: #4d3a1e; color: #ffce7a; }
+.recipes { display: flex; flex-direction: column; gap: 6px; }
+.recipe { display: flex; align-items: center; gap: 8px; background: #0e1c2c; border: 2px solid #25405c;
+  border-radius: 12px; padding: 7px 10px; }
+.recipe.locked { opacity: .55; }
+.recipe .ins { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; min-width: 120px; }
+.recipe .ing { font-size: 20px; line-height: 1; display: inline-flex; align-items: center; }
+.recipe .ing small { font-size: 11px; color: #bcd0e6; margin-left: 1px; }
+.recipe .plus { color: #6f88a3; font-weight: 700; }
+.recipe .to { color: #ffd54a; font-size: 18px; font-weight: 700; }
+.recipe .out { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 15px; flex: 1; }
+.recipe .out .oi { font-size: 22px; }
+.recipe .av { margin-left: auto; }
+
 .colors { display: flex; gap: 10px; flex-wrap: wrap; margin: 6px 0; }
 .sw { width: 40px; height: 40px; border-radius: 50%; border: 4px solid #2f4d6f; cursor: pointer; }
 .sw.sel { border-color: #ffd54a; transform: scale(1.1); }

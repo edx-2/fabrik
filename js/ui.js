@@ -31,10 +31,12 @@ FAB.UI = {
     var self = this;
     this.el.buttons.innerHTML =
       '<button id="btnBuild">🧰 Build (B)</button>' +
+      '<button id="btnTech">📖 Tech (O)</button>' +
       '<button id="btnBag">🎒 Bag (Tab)</button>' +
       '<button id="btnHelp">🤖 Help (H)</button>' +
       '<button id="btnMenu">⏸️ Menu</button>';
     this.el.buttons.querySelector('#btnBuild').onclick = function () { self.toggleBuildMenu(); };
+    this.el.buttons.querySelector('#btnTech').onclick = function () { self.toggleTech(); };
     this.el.buttons.querySelector('#btnBag').onclick = function () { self.toggleBag(); };
     this.el.buttons.querySelector('#btnHelp').onclick = function () { self.help(); };
     this.el.buttons.querySelector('#btnMenu').onclick = function () { self.showTitle(); };
@@ -120,6 +122,70 @@ FAB.UI = {
     });
   },
 
+  // ---- tech tree / recipe book (press O) ----------------------------------
+  toggleTech: function () {
+    if (!this.el.modal.classList.contains('hidden') && this.el.modal.dataset.kind === 'tech') { this.closeModal(); return; }
+    var g = this.game;
+    var carName = { car_basic: 'Basic Car', car_sporty: 'Sporty Car', car_super: 'Super Car' };
+
+    // where each raw resource comes from
+    var resBiome = {};
+    for (var bk in FAB.BIOME_RES) FAB.BIOME_RES[bk].forEach(function (res) { resBiome[res] = bk; });
+
+    function ings(r) {
+      return r.inputs.map(function (i) {
+        return '<span class="ing">' + (FAB.ITEMS[i[0]] ? FAB.ITEMS[i[0]].icon : '?') + '<small>×' + i[1] + '</small></span>';
+      }).join('<span class="plus">+</span>');
+    }
+    function badge(unlocked, ms) {
+      return unlocked ? '<span class="av ok">✅ ready</span>' : '<span class="av lk">🔒 Milestone ' + ms + '</span>';
+    }
+
+    var html = '<h2>📖 Tech Tree &amp; Recipes</h2>' +
+      '<p class="legend">Ingredients go <b>into</b> a machine and the result comes out. ' +
+      '<span class="av ok">✅ ready</span> = you can make it now · <span class="av lk">🔒</span> = unlocks at a later milestone.</p>';
+
+    // raw materials
+    html += '<h3 class="tech-h">⛏️ Raw materials — gather these</h3><div class="grid">';
+    ['iron_ore', 'copper_ore', 'coal', 'stone', 'wood', 'crude_oil'].forEach(function (id) {
+      var it = FAB.ITEMS[id], biome = resBiome[id] ? FAB.BIOMES[resBiome[id]].name : '—';
+      var oil = id === 'crude_oil';
+      var ok = oil ? !!g.unlocked.pump : true; // solids can be hand-mined from the start
+      var how = oil ? 'Oil Pump' : 'Drill / by hand';
+      html += '<div class="bitem' + (ok ? '' : ' locked') + '">' +
+        '<div class="ic">' + it.icon + '</div><div class="nm">' + it.name + '</div>' +
+        '<div class="ms">🗺️ ' + biome + '<br>' + how + '</div></div>';
+    });
+    html += '</div>';
+
+    // recipes grouped by the machine that makes them, in unlock order
+    var machines = ['furnace', 'crusher', 'sawmill', 'assembler', 'refinery', 'car_factory']
+      .filter(function (m) { return FAB.recipesFor(m).length; })
+      .sort(function (a, b) { return FAB.MACHINES[a].unlock - FAB.MACHINES[b].unlock; });
+
+    machines.forEach(function (mt) {
+      var md = FAB.MACHINES[mt], unlocked = !!g.unlocked[mt];
+      html += '<h3 class="tech-h' + (unlocked ? '' : ' off') + '">' + md.icon + ' ' + md.name +
+        ' ' + badge(unlocked, md.unlock) + '</h3><div class="recipes">';
+      FAB.recipesFor(mt).forEach(function (rid) {
+        var r = FAB.RECIPES[rid];
+        var outId = (r.out && typeof r.out === 'string') ? r.out : rid;
+        var qty = (typeof r.out === 'number') ? r.out : 1;
+        var icon = outId === 'car' ? '🚗' : FAB.ITEMS[outId].icon;
+        var name = outId === 'car' ? carName[rid] : FAB.ITEMS[outId].name;
+        html += '<div class="recipe' + (unlocked ? '' : ' locked') + '">' +
+          '<span class="ins">' + ings(r) + '</span>' +
+          '<span class="to">➜</span>' +
+          '<span class="out"><span class="oi">' + icon + '</span> ' + name + (qty > 1 ? ' ×' + qty : '') + '</span>' +
+          badge(unlocked, md.unlock) + '</div>';
+      });
+      html += '</div>';
+    });
+
+    html += '<button class="close">Close</button>';
+    this.openModal('tech', html);
+  },
+
   // ---- recipe picker (and car colour picker) ------------------------------
   openRecipe: function (game, e) {
     var recs = FAB.recipesFor(e.type);
@@ -194,6 +260,7 @@ FAB.UI = {
   renderHUD: function (g) {
     // keyboard shortcuts that open DOM panels
     if (g.input.pressed('build')) this.toggleBuildMenu();
+    if (g.input.pressed('tech')) this.toggleTech();
     if (g.input.pressed('bag')) this.toggleBag();
     if (g.input.pressed('help')) this.help();
 

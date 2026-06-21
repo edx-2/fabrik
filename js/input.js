@@ -10,7 +10,7 @@ FAB.Input = function (canvas) {
     ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down',
     ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
     Space: 'action', KeyE: 'enter', KeyB: 'build', KeyR: 'rotate', KeyX: 'remove',
-    KeyM: 'map', KeyH: 'help', KeyF: 'grapple', Escape: 'menu', Tab: 'bag',
+    KeyM: 'map', KeyH: 'help', KeyF: 'grapple', KeyO: 'tech', Escape: 'menu', Tab: 'bag',
     Digit1: 'h1', Digit2: 'h2', Digit3: 'h3', Digit4: 'h4', Digit5: 'h5',
     Digit6: 'h6', Digit7: 'h7', Digit8: 'h8', Digit9: 'h9'
   };
