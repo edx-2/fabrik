@@ -5,7 +5,7 @@ var FAB = window.FAB || (window.FAB = {});
 
 var BELT_SPEED = 0.17;   // fraction of a tile per tick
 var BELT_GAP = 0.34;     // min spacing between items on a belt
-var OUT_CAP = 24;        // max items buffered in a machine output
+var OUT_CAP = 3;         // max finished items a machine buffers before it stops (back-pressure)
 var PIPE_CAP = 60;       // oil capacity per connected pipe group
 
 FAB.Factory = function () {
@@ -84,6 +84,10 @@ FAB.Factory.prototype.acceptsInput = function (e, item) {
   if (e.kind === 'crafter') {
     var r = e.recipe && FAB.RECIPES[e.recipe];
     if (!r) return false;
+    // back-pressure: once the output buffer is full (OUT_CAP), refuse new input so
+    // grabbers stop loading this machine and the material flows on to others.
+    var outItem = (r.out && typeof r.out === 'string') ? r.out : e.recipe;
+    if ((e.outBuf[outItem] || 0) >= OUT_CAP) return false;
     for (var i = 0; i < r.inputs.length; i++) {
       var need = r.inputs[i];
       if (need[0] === item) return (e.inBuf[item] || 0) < need[1] * 3;
