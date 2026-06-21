@@ -93,6 +93,22 @@ FAB.World.prototype.biomeAt = function (x, y) {
   if (!this.inBounds(x, y)) return 'lake';
   return this.biome[this.idx(x, y)];
 };
+
+// Continuous biome lookup for smooth rendering: read the discrete biome grid at a
+// position that has been pushed around by noise ("domain warp"). This makes the
+// boundaries between areas wander as organic curves instead of following the
+// square tile grid — without changing gameplay (which still uses the tile grid).
+FAB.World.prototype.biomeAtFine = function (fx, fy) {
+  if (!this._wa) { this._wa = FAB.makeNoise(this.seed + ':warpA'); this._wb = FAB.makeNoise(this.seed + ':warpB'); }
+  var lo = 0.085, hi = 0.27;
+  var wx = fx
+    + 1.7 * (this._wa(fx * lo, fy * lo) - 0.5)
+    + 0.7 * (this._wa(fx * hi + 5.2, fy * hi) - 0.5);
+  var wy = fy
+    + 1.7 * (this._wb(fx * lo, fy * lo) - 0.5)
+    + 0.7 * (this._wb(fx * hi, fy * hi + 5.2) - 0.5);
+  return this.biomeAt(Math.round(wx), Math.round(wy));
+};
 FAB.World.prototype.nodeAt = function (x, y) { return this.nodes[FAB.key(x, y)] || null; };
 FAB.World.prototype.isWater = function (x, y) { return this.biomeAt(x, y) === 'lake'; };
 

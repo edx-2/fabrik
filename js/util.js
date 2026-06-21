@@ -7,6 +7,7 @@ FAB.TILE = 32;            // pixels per tile
 FAB.MAP_W = 200;          // tiles wide
 FAB.MAP_H = 140;          // tiles tall
 FAB.TICK_HZ = 8;          // factory simulation ticks per second
+FAB.CHUNK = 8;            // terrain bake chunk size, in tiles
 
 // ---- seeded RNG (mulberry32 + string hashing) -----------------------------
 FAB.hashSeed = function (str) {
@@ -36,6 +37,11 @@ FAB.lerp = function (a, b, t) { return a + (b - a) * t; };
 FAB.easeOutBack = function (x) { var c1 = 2.2, c3 = c1 + 1; var p = x - 1; return 1 + c3 * p * p * p + c1 * p * p; };
 FAB.dist2 = function (ax, ay, bx, by) { var dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
 FAB.key = function (x, y) { return x + ',' + y; };
+// parse "#rrggbb" -> [r,g,b]
+FAB.hex2rgb = function (hex) {
+  var h = hex.charAt(0) === '#' ? hex.slice(1) : hex;
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+};
 
 // Direction helpers. dir: 0=up,1=right,2=down,3=left
 FAB.DIR = [{ x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }];

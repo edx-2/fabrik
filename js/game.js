@@ -209,14 +209,19 @@ FAB.Game.prototype.render = function () {
   var x0 = Math.floor(cam.x / T), y0 = Math.floor(cam.y / T);
   var x1 = x0 + Math.ceil(vw / T) + 1, y1 = y0 + Math.ceil(vh / T) + 1;
 
-  // terrain
+  // terrain: blit pre-baked, smoothly-blended chunk canvases (no blocky squares)
+  ctx.fillStyle = '#23364a'; ctx.fillRect(0, 0, vw, vh); // backdrop for out-of-bounds
+  var CH = FAB.CHUNK, cs = CH * T;
+  var cc0x = Math.floor(x0 / CH), cc0y = Math.floor(y0 / CH);
+  var cc1x = Math.floor(x1 / CH), cc1y = Math.floor(y1 / CH);
+  for (var ccy = cc0y; ccy <= cc1y; ccy++) for (var ccx = cc0x; ccx <= cc1x; ccx++) {
+    var ch = this.getTerrainChunk(ccx, ccy);
+    if (ch) ctx.drawImage(ch, ccx * cs - cam.x, ccy * cs - cam.y);
+  }
+
+  // resource nodes + decoration, drawn crisply on top of the smooth ground
   for (var y = y0; y <= y1; y++) for (var x = x0; x <= x1; x++) {
-    if (!this.world.inBounds(x, y)) { ctx.fillStyle = '#23364a'; ctx.fillRect(x * T - cam.x, y * T - cam.y, T, T); continue; }
-    var bid = this.world.biomeAt(x, y), b = FAB.BIOMES[bid];
-    if (!FAB.Assets.draw(ctx, 'tile_' + bid, x * T - cam.x, y * T - cam.y, T, T, 0)) {
-      ctx.fillStyle = b.ground; ctx.fillRect(x * T - cam.x, y * T - cam.y, T, T);
-      if (((x * 7 + y * 13) & 7) === 0) { ctx.fillStyle = b.accent; ctx.fillRect(x * T - cam.x + 6, y * T - cam.y + 6, 6, 6); }
-    }
+    if (!this.world.inBounds(x, y)) continue;
     var node = this.world.nodeAt(x, y);
     if (node) this.drawNode(ctx, node, x * T - cam.x, y * T - cam.y);
     else { var dec = this.world.decor[FAB.key(x, y)]; if (dec) { ctx.font = '20px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(dec, x * T - cam.x + T / 2, y * T - cam.y + T / 2); } }
@@ -250,6 +255,123 @@ FAB.Game.prototype.render = function () {
 
   // celebrate confetti
   if (this.celebrate > 0) this.drawConfetti(ctx);
+};
+
+// ---------------------------------------------------------------- smooth terrain
+// A reusable offscreen canvas, fetched by name and (re)sized as needed. Setting
+// the width clears it, which is exactly what we want for scratch buffers.
+FAB.Game.prototype._scratch = function (name, w, h) {
+  this._cv = this._cv || {};
+  var c = this._cv[name] || (this._cv[name] = document.createElement('canvas'));
+  c.width = w; c.height = h;
+  return c;
+};
+
+// ids of ground textures available for a biome (base + numbered variants).
+FAB.Game.prototype.tileVariants = function (bid) {
+  var out = [], base = 'tile_' + bid;
+  if (FAB.Assets.has(base)) out.push(base);
+  for (var n = 2; n <= 4; n++) if (FAB.Assets.has(base + '_' + n)) out.push(base + '_' + n);
+  return out;
+};
+
+// Tile a texture across a chunk-sized context, aligned to the global tile grid so
+// the pattern is continuous across chunks.
+FAB.Game.prototype._tileFill = function (dctx, id, cs) {
+  var img = FAB.Assets.imgs[id];
+  if (!img) return;
+  var span = FAB.TILE * 2; // each copy covers 2x2 tiles, so the pattern repeats less often
+  for (var yy = 0; yy < cs; yy += span) for (var xx = 0; xx < cs; xx += span)
+    dctx.drawImage(img, 0, 0, img.width, img.height, xx, yy, span, span);
+};
+
+// Bake one terrain chunk:
+//   1) sample a domain-warped biome field at sub-tile resolution (curved borders)
+//   2) paint a smooth colour base from that field
+//   3) splat each biome's seamless texture through a soft curved mask, blending a
+//      second variant in with low-frequency noise for diversity
+// Cached; rebaked only when textures stream in.
+FAB.Game.prototype.getTerrainChunk = function (ccx, ccy) {
+  if (typeof document === 'undefined') return null;
+  if (!this.terrainChunks) { this.terrainChunks = {}; this._chunkKeys = []; }
+  var key = ccx + ',' + ccy, ver = FAB.Assets.terrainVersion || 0;
+  var cached = this.terrainChunks[key];
+  if (cached && cached._texVer === ver) return cached;
+
+  var self = this, w = this.world, T = FAB.TILE, CH = FAB.CHUNK, cs = CH * T;
+  var STEP = 4, G = cs / STEP;                 // field resolution: one sample / 4px
+  if (!this._biomeIds) { this._biomeIds = Object.keys(FAB.BIOMES); this._biomeRGB = {}; for (var k in FAB.BIOMES) this._biomeRGB[k] = FAB.hex2rgb(FAB.BIOMES[k].ground); }
+  if (!this._varNoise) this._varNoise = FAB.makeNoise(this.seed + ':variant');
+
+  // 1) warped biome field (G x G) + which biomes appear here
+  var field = new Array(G * G), present = {};
+  for (var gj = 0; gj < G; gj++) for (var gi = 0; gi < G; gi++) {
+    var tileX = (ccx * cs + gi * STEP + STEP / 2) / T, tileY = (ccy * cs + gj * STEP + STEP / 2) / T;
+    var bid = w.biomeAtFine(tileX, tileY);
+    field[gj * G + gi] = bid; present[bid] = true;
+  }
+
+  // 2) smooth colour base from the field (curved boundaries, only ~4px soft)
+  var base = this._scratch('fieldSmall', G, G), bctx = base.getContext('2d');
+  var bimg = bctx.createImageData(G, G);
+  for (var p = 0; p < field.length; p++) { var c = this._biomeRGB[field[p]], o = p * 4; bimg.data[o] = c[0]; bimg.data[o + 1] = c[1]; bimg.data[o + 2] = c[2]; bimg.data[o + 3] = 255; }
+  bctx.putImageData(bimg, 0, 0);
+
+  var canvas = document.createElement('canvas'); canvas.width = cs; canvas.height = cs;
+  var cx = canvas.getContext('2d');
+  cx.imageSmoothingEnabled = true; cx.imageSmoothingQuality = 'high';
+  cx.drawImage(base, 0, 0, G, G, 0, 0, cs, cs);
+
+  // 3) texture splat per biome present
+  Object.keys(present).forEach(function (bid) {
+    var variants = self.tileVariants(bid);
+    if (!variants.length) return;
+
+    // soft curved mask for this biome (G x G alpha -> upscaled)
+    var mask = self._scratch('maskSmall', G, G), mctx = mask.getContext('2d');
+    var mimg = mctx.createImageData(G, G);
+    for (var q = 0; q < field.length; q++) { mimg.data[q * 4 + 3] = field[q] === bid ? 255 : 0; }
+    mctx.putImageData(mimg, 0, 0);
+
+    // build the biome's textured layer at full resolution
+    var layer = self._scratch('layer', cs, cs), lctx = layer.getContext('2d');
+    lctx.globalCompositeOperation = 'source-over'; lctx.clearRect(0, 0, cs, cs);
+    self._tileFill(lctx, variants[0], cs);
+    // blend each extra variant in soft low-frequency blobs (noise uses world coords,
+    // so blobs are continuous across chunk borders -> no seams), for diversity.
+    for (var vi = 1; vi < variants.length; vi++) {
+      var v2 = self._scratch('v2', cs, cs), v2c = v2.getContext('2d');
+      v2c.globalCompositeOperation = 'source-over'; v2c.clearRect(0, 0, cs, cs);
+      self._tileFill(v2c, variants[vi], cs);
+      var bm = self._scratch('blobSmall', G, G), bmc = bm.getContext('2d'), bmi = bmc.createImageData(G, G), off = vi * 31.7;
+      for (var r2 = 0; r2 < G; r2++) for (var s2 = 0; s2 < G; s2++) {
+        var nx = (ccx * cs + s2 * STEP) / T, ny = (ccy * cs + r2 * STEP) / T;
+        var nv = self._varNoise(nx * 0.16 + off, ny * 0.16 + off);
+        bmi.data[(r2 * G + s2) * 4 + 3] = Math.round(FAB.clamp((nv - 0.52) / 0.16, 0, 1) * 255);
+      }
+      bmc.putImageData(bmi, 0, 0);
+      v2c.globalCompositeOperation = 'destination-in';
+      v2c.imageSmoothingEnabled = true; v2c.drawImage(bm, 0, 0, G, G, 0, 0, cs, cs);
+      lctx.drawImage(v2, 0, 0);
+    }
+    // clip the layer to the curved biome mask, then stamp onto the chunk
+    lctx.globalCompositeOperation = 'destination-in';
+    lctx.imageSmoothingEnabled = true; lctx.imageSmoothingQuality = 'high';
+    lctx.drawImage(mask, 0, 0, G, G, 0, 0, cs, cs);
+    lctx.globalCompositeOperation = 'source-over';
+    cx.drawImage(layer, 0, 0);
+  });
+
+  // gentle grain so flat areas have life
+  var rng = FAB.makeRng(this.seed + ':chunk:' + key);
+  cx.globalAlpha = 0.045;
+  for (var s = 0; s < CH * CH * 2; s++) { cx.fillStyle = rng() < 0.5 ? '#000' : '#fff'; cx.beginPath(); cx.arc(rng() * cs, rng() * cs, 1 + rng() * 1.4, 0, 6.283); cx.fill(); }
+  cx.globalAlpha = 1;
+
+  canvas._texVer = ver;
+  if (!cached) { this._chunkKeys.push(key); if (this._chunkKeys.length > 96) { var old = this._chunkKeys.shift(); delete this.terrainChunks[old]; } }
+  this.terrainChunks[key] = canvas;
+  return canvas;
 };
 
 FAB.Game.prototype.drawNode = function (ctx, node, sx, sy) {

@@ -84,13 +84,16 @@ def _car(id_, extra):
     )
 
 
-def _tile(id_, name, look):
+def _tile(id_, name, look, suffix="", variation=""):
+    # suffix "" = base texture; "_2","_3" = diversity variants the renderer blends in
     return AssetSpec(
-        id="tile_" + id_, category="tiles", game_id="tile_" + id_, cell=64, bg="keep",
+        id="tile_" + id_ + suffix, category="tiles", game_id="tile_" + id_ + suffix,
+        cell=96, bg="keep",
         prompt=(
             f"{STYLE} A seamless, tileable top-down ground texture of {name}. {look} "
-            f"Flat even lighting, no objects, no shadows, edges that tile seamlessly. "
-            f"Fills the whole square frame edge to edge."
+            f"{variation} Flat even lighting, no objects sticking out, no shadows, edges "
+            f"that tile seamlessly with copies of itself. Fills the whole square frame "
+            f"edge to edge."
         ),
     )
 
@@ -142,15 +145,30 @@ SPECS += [
 ]
 
 # ---- ground tiles (optional polish; game uses flat colors if absent) ------
-SPECS += [
-    _tile("meadow", "green grassy meadow", "Lush soft green grass with a few tiny flowers."),
-    _tile("forest", "forest floor", "Darker green mossy ground under trees."),
-    _tile("rocky", "rocky hills ground", "Grey cracked rock and pebbles."),
-    _tile("quarry", "sandy quarry ground", "Pale tan sand and gravel."),
-    _tile("marsh", "oily marsh ground", "Murky greenish-brown muddy marsh with little dark puddles."),
-    _tile("lake", "shallow water", "Calm bright blue water with gentle ripples."),
-    _tile("rainbow", "magical pastel hills", "Soft pastel rainbow-tinted grass, whimsical."),
+# Each biome has a base texture plus 2 diversity VARIANTS ("_2","_3"). The renderer
+# tiles the base and softly blends a variant in with noise so big areas don't look
+# repetitive. Keep variants the SAME overall colour/brightness as the base so they
+# blend invisibly — only the small detail should differ.
+_TILES = [
+    ("meadow", "green grassy meadow", "Lush soft green grass.",
+        ["with a few tiny flowers.", "with little white daisies and clover.", "with short and long grass tufts."]),
+    ("forest", "forest floor", "Darker green mossy ground under trees.",
+        ["with scattered moss patches.", "with a few fallen leaves and twigs.", "with small ferns and roots."]),
+    ("rocky", "rocky hills ground", "Grey cracked rock and pebbles.",
+        ["with fine gravel.", "with bigger cracked boulders.", "with mossy stone patches."]),
+    ("quarry", "sandy quarry ground", "Pale tan sand and gravel.",
+        ["with rippled sand.", "with small scattered pebbles.", "with dry cracked earth."]),
+    ("marsh", "oily marsh ground", "Murky greenish-brown muddy marsh.",
+        ["with little dark puddles.", "with reeds and bubbles.", "with oily rainbow sheen spots."]),
+    ("lake", "shallow water", "Calm bright blue water.",
+        ["with gentle ripples.", "with soft wave highlights.", "with little sparkles."]),
+    ("rainbow", "magical pastel hills", "Soft pastel rainbow-tinted grass.",
+        ["whimsical and dreamy.", "with tiny sparkles.", "with faint pastel swirls."]),
 ]
+for _b, _name, _look, _vars in _TILES:
+    SPECS.append(_tile(_b, _name, _look, "", _vars[0]))
+    SPECS.append(_tile(_b, _name, _look, "_2", _vars[1]))
+    SPECS.append(_tile(_b, _name, _look, "_3", _vars[2]))
 
 # ---- item icons -----------------------------------------------------------
 # (item_id, friendly name, look) — small icons shown on belts and in the bag.

@@ -10,6 +10,7 @@ FAB.Assets = {
   defs: {},
   imgs: {},      // id -> HTMLImageElement (once loaded)
   ready: {},     // id -> true when loaded ok
+  terrainVersion: 0, // bumped when a tile_* texture loads, so terrain chunks rebake
 
   init: function () {
     var m = window.FAB_ASSETS;
@@ -20,7 +21,7 @@ FAB.Assets = {
     Object.keys(this.defs).forEach(function (id) {
       var d = self.defs[id];
       var img = new Image();
-      img.onload = function () { self.ready[id] = true; };
+      img.onload = function () { self.ready[id] = true; if (id.indexOf('tile_') === 0) self.terrainVersion++; };
       img.onerror = function () { console.warn('[assets] failed', id, d.file); };
       img.src = self.base + d.file;
       self.imgs[id] = img;

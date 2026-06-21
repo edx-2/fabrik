@@ -46,23 +46,65 @@ window.FAB_ASSETS = {
     "tile_meadow": {
       "file": "tile_meadow.png"
     },
+    "tile_meadow_2": {
+      "file": "tile_meadow_2.png"
+    },
+    "tile_meadow_3": {
+      "file": "tile_meadow_3.png"
+    },
     "tile_forest": {
       "file": "tile_forest.png"
+    },
+    "tile_forest_2": {
+      "file": "tile_forest_2.png"
+    },
+    "tile_forest_3": {
+      "file": "tile_forest_3.png"
     },
     "tile_rocky": {
       "file": "tile_rocky.png"
     },
+    "tile_rocky_2": {
+      "file": "tile_rocky_2.png"
+    },
+    "tile_rocky_3": {
+      "file": "tile_rocky_3.png"
+    },
     "tile_quarry": {
       "file": "tile_quarry.png"
+    },
+    "tile_quarry_2": {
+      "file": "tile_quarry_2.png"
+    },
+    "tile_quarry_3": {
+      "file": "tile_quarry_3.png"
     },
     "tile_marsh": {
       "file": "tile_marsh.png"
     },
+    "tile_marsh_2": {
+      "file": "tile_marsh_2.png"
+    },
+    "tile_marsh_3": {
+      "file": "tile_marsh_3.png"
+    },
     "tile_lake": {
       "file": "tile_lake.png"
     },
+    "tile_lake_2": {
+      "file": "tile_lake_2.png"
+    },
+    "tile_lake_3": {
+      "file": "tile_lake_3.png"
+    },
     "tile_rainbow": {
       "file": "tile_rainbow.png"
+    },
+    "tile_rainbow_2": {
+      "file": "tile_rainbow_2.png"
+    },
+    "tile_rainbow_3": {
+      "file": "tile_rainbow_3.png"
     },
     "item_iron_ore": {
       "file": "item_iron_ore.png"
