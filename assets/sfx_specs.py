@@ -23,15 +23,16 @@ class SfxSpec:
     loop: bool = False
     volume: float = 0.7     # default playback volume in-game (0..1)
     influence: float = 0.3  # prompt_influence (0..1)
+    loop_end: float = None  # loop only the first N seconds (skip a trailing stop)
 
     @property
     def game_id(self) -> str:
         return self.id
 
 
-def _s(id, category, prompt, duration, loop=False, volume=0.7, influence=0.3):
+def _s(id, category, prompt, duration, loop=False, volume=0.7, influence=0.3, loop_end=None):
     return SfxSpec(id=id, category=category, prompt=f"{STYLE} {prompt}",
-                   duration=duration, loop=loop, volume=volume, influence=influence)
+                   duration=duration, loop=loop, volume=volume, influence=influence, loop_end=loop_end)
 
 
 SPECS: List[SfxSpec] = [
@@ -50,7 +51,7 @@ SPECS: List[SfxSpec] = [
     _s("place", "factory", "A satisfying soft chunky thunk placing a toy machine block down.", 0.5, volume=0.55),
     _s("remove", "factory", "A soft reverse whoosh pop picking an object back up.", 0.5, volume=0.5),
     _s("craft", "factory", "A light pleasant mechanical ding-clink as a little machine finishes a part.", 0.5, volume=0.4),
-    _s("belt_loop", "factory", "A smooth, continuous, CONSTANT low mechanical hum of a running conveyor belt — one unbroken steady drone at a flat, even level the entire time. It must have NO beginning and NO end, NO fade in or out, and NO pauses or gaps; the very start and very end match so it loops perfectly seamlessly with no click.", 7.0, loop=True, volume=0.22),
+    _s("belt_loop", "factory", "A smooth, continuous, CONSTANT low mechanical hum of a running conveyor belt — one unbroken steady drone at a flat, even level the entire time. It must have NO beginning and NO end, NO fade in or out, and NO pauses or gaps; the very start and very end match so it loops perfectly seamlessly with no click.", 7.0, loop=True, volume=0.22, loop_end=6.0),
 
     # ---- car --------------------------------------------------------------
     _s("car_ready", "car", "A cute toy car engine rev followed by a happy little chime, friendly.", 1.8, volume=0.65),

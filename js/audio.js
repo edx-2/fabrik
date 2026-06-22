@@ -13,6 +13,9 @@ FAB.Audio = {
   ready: false,
   actx: null,   // Web Audio context (for gapless loops); null if unavailable
   buffers: {},  // id -> AudioBuffer | 'loading' | 'failed'
+  // loop only the clean front of a sound (seconds), skipping a trailing stop in
+  // the generated file. Overridable per-sound via the manifest's loopEnd.
+  loopEndDefaults: { belt_loop: 6 },
 
   init: function () {
     try { this.muted = localStorage.getItem('fabrik:muted') === '1'; } catch (e) {}
@@ -24,7 +27,8 @@ FAB.Audio = {
       var d = defs[id];
       self.sounds[id] = {
         src: self.base + d.file, loop: !!d.loop,
-        volume: (d.volume != null ? d.volume : 0.7), lastPlay: 0, pool: []
+        volume: (d.volume != null ? d.volume : 0.7), lastPlay: 0, pool: [],
+        loopEnd: (d.loopEnd != null ? d.loopEnd : self.loopEndDefaults[id])
       };
     });
     // Web Audio gives gapless loops; eagerly decode the looping sounds. Decoding
@@ -72,9 +76,10 @@ FAB.Audio = {
     var vol = volume != null ? volume : s.volume;
     var buf = this.buffers[id];
     if (this.actx && buf && buf !== 'loading' && buf !== 'failed') {
-      // gapless Web Audio loop
+      // gapless Web Audio loop (with optional loopEnd to skip a trailing stop)
       try { if (this.actx.state === 'suspended') this.actx.resume(); } catch (e) {}
       var src = this.actx.createBufferSource(); src.buffer = buf; src.loop = true;
+      if (s.loopEnd && s.loopEnd < buf.duration) { src.loopStart = 0; src.loopEnd = s.loopEnd; }
       var g = this.actx.createGain(); g.gain.value = this.muted ? 0 : vol;
       src.connect(g); g.connect(this.actx.destination);
       try { src.start(0); } catch (e) {}
@@ -82,7 +87,13 @@ FAB.Audio = {
       return;
     }
     if (this.actx && !buf) this._decode(id);          // try to upgrade next time
-    var a = new Audio(s.src); a.loop = true;
+    var a = new Audio(s.src);
+    if (s.loopEnd) {
+      // HTMLAudio can't set a loop region, so seek back near the trim point
+      a.loop = false; var le = s.loopEnd;
+      a.addEventListener('timeupdate', function () { if (a.currentTime >= le) { try { a.currentTime = 0; } catch (e) {} } });
+      a.addEventListener('ended', function () { try { a.currentTime = 0; a.play(); } catch (e) {} });
+    } else { a.loop = true; }
     a.volume = this.muted ? 0 : vol;
     this.loops[id] = { web: false, el: a, vol: vol };
     var p = a.play(); if (p && p.catch) p.catch(function () {});

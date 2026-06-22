@@ -55,7 +55,8 @@ window.FAB_SFX = {
     "belt_loop": {
       "file": "belt_loop.mp3",
       "loop": true,
-      "volume": 0.22
+      "volume": 0.22,
+      "loopEnd": 6.0
     },
     "car_ready": {
       "file": "car_ready.mp3",
