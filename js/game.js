@@ -824,6 +824,13 @@ FAB.Game.prototype.beltSprite = function (type, dir, from, frame) {
   var pointAt = this.beltPath({ dir: dir }, { type: type, from: from }, 0, 0); // local coords
   var SAMP = type === 'corner' ? 12 : 1, pts = [], i;
   for (i = 0; i <= SAMP; i++) pts.push(pointAt(i / SAMP));
+  // extend both ends a couple px PAST the tile edge (perpendicular to it) so the
+  // butt cap lands outside the canvas and is clipped — leaving fully-opaque edge
+  // columns that meet neighbouring belts with no sub-pixel gap.
+  var EXT = 2, ent = FAB.DIR[type === 'corner' ? from : ((dir + 2) & 3)], ext = FAB.DIR[dir];
+  pts.unshift({ x: pts[0].x + ent.x * EXT, y: pts[0].y + ent.y * EXT });
+  var lp = pts[pts.length - 1];
+  pts.push({ x: lp.x + ext.x * EXT, y: lp.y + ext.y * EXT });
   function strokePath(w, color) {
     ctx.lineWidth = w; ctx.strokeStyle = color; ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
     ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
