@@ -58,12 +58,17 @@ FAB.Game.prototype.seedProps = function (tx, ty) {
 // ---------------------------------------------------------------- stats hooks
 FAB.Game.prototype.onProduced = function (item, qty, meta) {
   this.stats.produced[item] = (this.stats.produced[item] || 0) + qty;
-  if (item === 'car' && meta && meta.color) this.stats.carColors[meta.color] = true;
+  if (item === 'car' && meta) {
+    if (meta.color) this.stats.carColors[meta.color] = true;
+    if (meta.kind) { this.stats.carKinds = this.stats.carKinds || {}; this.stats.carKinds[meta.kind] = (this.stats.carKinds[meta.kind] || 0) + qty; }
+  }
 };
 FAB.Game.prototype.boxItemCount = function (item) {
   var n = 0; this.factory.eachEntity(function (e) { if (e.kind === 'box') n += (e.store[item] || 0); }); return n;
 };
 FAB.Game.prototype.distinctCarColors = function () { return Object.keys(this.stats.carColors).length; };
+// how many finished CARS of a kind have been built (sporty/super carry a spoiler)
+FAB.Game.prototype.carKindCount = function (kind) { return (this.stats.carKinds && this.stats.carKinds[kind]) || 0; };
 
 FAB.Game.prototype.toast = function (msg) { this.toasts.push({ msg: msg, t: 2.2 }); if (this.toasts.length > 5) this.toasts.shift(); };
 

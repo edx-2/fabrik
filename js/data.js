@@ -185,10 +185,10 @@ FAB.MILESTONES = [
     goal: function (g) { return { have: g.distinctCarColors(), need: 3, label: 'Car colors made' }; } },
   { n: 9, title: 'Need for Speed', blurb: 'Build a Sporty Car with a Spoiler.',
     unlock: [],
-    goal: function (g) { return { have: produced(g, 'spoiler'), need: 1, label: 'Spoiler' }; } },
+    goal: function (g) { return { have: g.carKindCount('sporty') + g.carKindCount('super'), need: 1, label: 'Car with a Spoiler' }; } },
   { n: 10, title: 'The Grand Grappler', blurb: 'Build the ultimate Super Car with a Grappler!',
     unlock: [],
-    goal: function (g) { return { have: produced(g, 'grappler'), need: 1, label: 'Grappler' }; } }
+    goal: function (g) { return { have: g.carKindCount('super'), need: 1, label: 'Super Car (with a Grappler)' }; } }
 ];
 
 // Paint / car colors the child can choose at the Car Factory.
