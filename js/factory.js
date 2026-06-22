@@ -14,6 +14,14 @@ FAB.Factory = function () {
   this.pipeDirty = true;
   this.groups = [];      // [{ cells:[keys], oil, cap }]
   this.cellGroup = {};   // pipe cell key -> group index
+  this.structVer = 0;    // bumped when machines are placed/removed (for render caches)
+  this._list = null;     // cached entity array, rebuilt only when structure changes
+};
+
+// stable entity array — avoids allocating Object.keys().map() every tick
+FAB.Factory.prototype.entList = function () {
+  if (!this._list) { this._list = []; for (var k in this.ents) this._list.push(this.ents[k]); }
+  return this._list;
 };
 
 FAB.Factory.prototype.keyOwner = function (x, y) { return this.owner[FAB.key(x, y)]; };
@@ -58,6 +66,7 @@ FAB.Factory.prototype.place = function (type, x, y, dir, world) {
   for (var oy = 0; oy < e.size; oy++) for (var ox = 0; ox < e.size; ox++)
     this.owner[FAB.key(x + ox, y + oy)] = k;
   if (def.kind === 'pipe' || def.kind === 'pump' || def.kind === 'refinery') this.pipeDirty = true;
+  this.structVer++; this._list = null;
   return e;
 };
 
@@ -74,6 +83,7 @@ FAB.Factory.prototype.remove = function (x, y) {
     delete this.owner[FAB.key(e.x + ox, e.y + oy)];
   delete this.ents[k];
   if (e.kind === 'pipe' || e.kind === 'pump' || e.kind === 'refinery') this.pipeDirty = true;
+  this.structVer++; this._list = null;
   refunds[e.type] = (refunds[e.type] || 0) + 1; // the machine itself
   return refunds;
 };
@@ -147,7 +157,7 @@ FAB.Factory.prototype.dropOnCross = function (cross, dirIdx, item) {
 // Advance one lane of items along dirIdx and hand the front one off at the end.
 // Shared by normal belts and both lanes of a crossing.
 FAB.Factory.prototype.advanceLane = function (items, x, y, dirIdx, game) {
-  items.sort(function (a, b) { return b.pos - a.pos; });
+  if (items.length > 1) items.sort(function (a, b) { return b.pos - a.pos; });
   var dir = FAB.DIR[dirIdx];
   for (var i = 0; i < items.length; i++) {
     var it = items[i];
@@ -202,7 +212,7 @@ FAB.Factory.prototype.adjacentPipeGroup = function (e) {
 FAB.Factory.prototype.tick = function (game) {
   if (this.pipeDirty) this.rebuildPipes();
   var self = this, world = game.world;
-  var list = Object.keys(this.ents).map(function (k) { return self.ents[k]; });
+  var list = this.entList();
 
   // 1) pumps add oil
   list.forEach(function (e) {

@@ -619,6 +619,8 @@ FAB.Game.prototype.drawDirArrow = function (ctx, e, sx, sy, sz) {
 // A neighbour belt at side k feeds INTO this belt when its dir == opposite(k).
 // Straight feed (from behind) wins; if exactly one side feeds, we draw a corner.
 FAB.Game.prototype.beltShape = function (e) {
+  var sv = this.factory.structVer || 0;
+  if (e._shape && e._sv === sv) return e._shape;     // only recompute when the layout changes
   var D = e.dir, back = (D + 2) & 3, left = (D + 3) & 3, right = (D + 1) & 3, f = this.factory;
   function feeds(k, want) {
     var n = f.at(e.x + FAB.DIR[k].x, e.y + FAB.DIR[k].y);
@@ -627,8 +629,11 @@ FAB.Game.prototype.beltShape = function (e) {
   var straight = feeds(back, D);
   var leftFeed = feeds(left, right);   // belt on our left pointing across into us
   var rightFeed = feeds(right, left);  // belt on our right pointing across into us
-  if (straight || (leftFeed && rightFeed) || (!leftFeed && !rightFeed)) return { type: 'straight', from: back };
-  return { type: 'corner', from: leftFeed ? left : right };
+  var s;
+  if (straight || (leftFeed && rightFeed) || (!leftFeed && !rightFeed)) s = { type: 'straight', from: back };
+  else s = { type: 'corner', from: leftFeed ? left : right };
+  e._shape = s; e._sv = sv;
+  return s;
 };
 
 // Returns pointAt(p): the screen point for belt-progress p in [0,1] (entry -> exit),
@@ -652,51 +657,54 @@ FAB.Game.prototype.beltPath = function (e, shape, sx, sy) {
 // belt body first and then every belt's cargo on top — otherwise a neighbouring
 // belt's body would paint over the items near the shared edge.
 FAB.Game.prototype.drawBeltBody = function (ctx, e) {
-  var T = FAB.TILE, sx = e.x * T - this.cam.x, sy = e.y * T - this.cam.y;
+  var T = FAB.TILE, sx = Math.round(e.x * T - this.cam.x), sy = Math.round(e.y * T - this.cam.y);
   var shape = this.beltShape(e);
-  var pointAt = this.beltPath(e, shape, sx, sy);
-  var SAMP = shape.type === 'corner' ? 12 : 1, pts = [], i;
-  for (i = 0; i <= SAMP; i++) pts.push(pointAt(i / SAMP));
+  var now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
+  var frame = (((now * 1.35) % 1) * FAB.BELT_FRAMES) | 0;  // tread phase
+  ctx.drawImage(this.beltSprite(shape.type, e.dir, shape.from, frame), sx, sy);
+};
 
-  // 'butt' caps end the stroke flat at the tile edge so neighbouring belts abut
-  // seamlessly (round caps poked a half-circle into the next tile). Round joins
-  // keep the corner arc smooth.
-  function strokePath(w, color, cap) {
-    ctx.lineWidth = w; ctx.strokeStyle = color; ctx.lineCap = cap || 'butt'; ctx.lineJoin = 'round';
+// Cached, baked belt body+treads (one image per shape per tread phase) so the
+// render loop blits a single image instead of re-stroking ~14 paths per belt.
+FAB.Game.prototype.beltSprite = function (type, dir, from, frame) {
+  this._beltCache = this._beltCache || {};
+  var key = type + dir + (from == null ? '' : 'f' + from) + 'p' + frame;
+  var c = this._beltCache[key];
+  if (c) return c;
+  var T = FAB.TILE;
+  c = document.createElement('canvas'); c.width = T; c.height = T;
+  var ctx = c.getContext('2d');
+  var pointAt = this.beltPath({ dir: dir }, { type: type, from: from }, 0, 0); // local coords
+  var SAMP = type === 'corner' ? 12 : 1, pts = [], i;
+  for (i = 0; i <= SAMP; i++) pts.push(pointAt(i / SAMP));
+  function strokePath(w, color) {
+    ctx.lineWidth = w; ctx.strokeStyle = color; ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
     ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
     for (var j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x, pts[j].y);
     ctx.stroke();
   }
-
-  ctx.save();
-  strokePath(T * 0.92, 'rgba(0,0,0,0.16)');      // ground shadow
-  strokePath(T * 0.90, '#22252b');               // dark outer frame
-  strokePath(T * 0.82, '#5a626e');               // metallic side rails
-  strokePath(T * 0.78, '#3a3f48');               // rail inner bevel
-  strokePath(T * 0.60, '#2f333b');               // belt rubber surface
-
-  // animated treads scrolling along the belt at the real transport speed
-  var now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
-  var N = 4, speed = 1.35; // tiles/sec (BELT_SPEED 0.17 * 8 ticks)
-  ctx.lineCap = 'butt';
-  for (var k = 0; k < N; k++) {
-    var p = ((k / N) + now * speed) % 1;
+  strokePath(T * 0.92, 'rgba(0,0,0,0.16)');
+  strokePath(T * 0.90, '#22252b');
+  strokePath(T * 0.82, '#5a626e');
+  strokePath(T * 0.78, '#3a3f48');
+  strokePath(T * 0.60, '#2f333b');
+  var off = frame / FAB.BELT_FRAMES;
+  for (var k = 0; k < 4; k++) {
+    var p = ((k / 4) + off) % 1;
     var a = pointAt(Math.min(1, p + 0.03)), b = pointAt(Math.max(0, p - 0.03));
     var ang = Math.atan2(a.y - b.y, a.x - b.x);
     var pt = pointAt(p), nx = Math.cos(ang + Math.PI / 2), ny = Math.sin(ang + Math.PI / 2);
     ctx.strokeStyle = '#646b78'; ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(pt.x - nx * T * 0.29, pt.y - ny * T * 0.29);
-    ctx.lineTo(pt.x + nx * T * 0.29, pt.y + ny * T * 0.29);
-    ctx.stroke();
+    ctx.moveTo(pt.x - nx * T * 0.29, pt.y - ny * T * 0.29); ctx.lineTo(pt.x + nx * T * 0.29, pt.y + ny * T * 0.29); ctx.stroke();
     ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(pt.x - nx * T * 0.29 + Math.cos(ang) * 2, pt.y - ny * T * 0.29 + Math.sin(ang) * 2);
-    ctx.lineTo(pt.x + nx * T * 0.29 + Math.cos(ang) * 2, pt.y + ny * T * 0.29 + Math.sin(ang) * 2);
-    ctx.stroke();
+    ctx.lineTo(pt.x + nx * T * 0.29 + Math.cos(ang) * 2, pt.y + ny * T * 0.29 + Math.sin(ang) * 2); ctx.stroke();
   }
-  strokePath(2, 'rgba(255,255,255,0.06)');       // faint center sheen
-  ctx.restore();
+  strokePath(2, 'rgba(255,255,255,0.06)');
+  this._beltCache[key] = c;
+  return c;
 };
 
 // Drawn in a second pass (after every belt body) so cargo is never clipped by a

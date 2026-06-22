@@ -8,6 +8,7 @@ FAB.MAP_W = 200;          // tiles wide
 FAB.MAP_H = 140;          // tiles tall
 FAB.TICK_HZ = 8;          // factory simulation ticks per second
 FAB.CHUNK = 8;            // terrain bake chunk size, in tiles
+FAB.BELT_FRAMES = 10;     // baked tread-animation frames per belt shape
 
 // ---- seeded RNG (mulberry32 + string hashing) -----------------------------
 FAB.hashSeed = function (str) {
