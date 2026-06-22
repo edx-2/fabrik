@@ -5,7 +5,7 @@ var FAB = window.FAB || (window.FAB = {});
 
 var BELT_SPEED = 0.17;   // fraction of a tile per tick
 var BELT_GAP = 0.34;     // min spacing between items on a belt
-var OUT_CAP = 3;         // max finished items a machine buffers before it stops (back-pressure)
+var OUT_CAP = 10;        // max finished items a machine buffers before it stops (back-pressure)
 var PIPE_CAP = 60;       // oil capacity per connected pipe group
 
 FAB.Factory = function () {
