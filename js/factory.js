@@ -147,14 +147,14 @@ FAB.Factory.prototype.crossLaneDir = function (e, horiz) {
     if (flows(er, 3)) return 3;            // east neighbour feeds west INTO us
     if (flows(er, 1) || sink(er)) return 1; // we OUTPUT east into an east-flowing belt / machine
     if (flows(wl, 3) || sink(wl)) return 3; // we OUTPUT west
-    return e.dirH || 1;
+    return e.dirH == null ? 1 : e.dirH;
   }
   var up = this.at(e.x, e.y - 1), dn = this.at(e.x, e.y + 1);
   if (flows(up, 2)) return 2;              // above feeds south INTO us
   if (flows(dn, 0)) return 0;              // below feeds north INTO us
   if (flows(dn, 2) || sink(dn)) return 2;  // we OUTPUT south
   if (flows(up, 0) || sink(up)) return 0;  // we OUTPUT north
-  return e.dirV || 2;
+  return e.dirV == null ? 2 : e.dirV;      // dir 0 (north) is falsy — don't use ||
 };
 FAB.Factory.prototype.dropOnCross = function (cross, dirIdx, item) {
   var horiz = (dirIdx === 1 || dirIdx === 3);

@@ -606,7 +606,7 @@ FAB.Game.prototype.drawCross = function (ctx, e, sx, sy) {
 FAB.Game.prototype.drawCrossLane = function (ctx, e, sx, sy, horiz) {
   var T = FAB.TILE, cx = sx + T / 2, cy = sy + T / 2;
   var fh = Math.round(T * 0.45), sh = Math.round(T * 0.30);   // frame/surface half-widths == belts
-  var dirIdx = horiz ? (e.dirH || 1) : (e.dirV || 2), d = FAB.DIR[dirIdx];
+  var dirIdx = horiz ? (e.dirH == null ? 1 : e.dirH) : (e.dirV == null ? 2 : e.dirV), d = FAB.DIR[dirIdx]; // dir 0 (north) is falsy — don't use ||
   var items = horiz ? (e.itemsH || []) : (e.itemsV || []);
   var now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
   ctx.save();
