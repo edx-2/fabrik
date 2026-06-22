@@ -8,9 +8,11 @@ var FAB = window.FAB || (window.FAB = {});
 FAB.Audio = {
   base: '',
   sounds: {},   // id -> { src, loop, volume, lastPlay, pool:[] }
-  loops: {},    // id -> HTMLAudioElement currently looping
+  loops: {},    // id -> { web, src/el, gain, vol } currently looping
   muted: false,
   ready: false,
+  actx: null,   // Web Audio context (for gapless loops); null if unavailable
+  buffers: {},  // id -> AudioBuffer | 'loading' | 'failed'
 
   init: function () {
     try { this.muted = localStorage.getItem('fabrik:muted') === '1'; } catch (e) {}
@@ -25,8 +27,23 @@ FAB.Audio = {
         volume: (d.volume != null ? d.volume : 0.7), lastPlay: 0, pool: []
       };
     });
+    // Web Audio gives gapless loops; eagerly decode the looping sounds. Decoding
+    // needs the bytes via fetch, which is blocked on file:// — in that case we
+    // fall back to (near-seamless) HTMLAudio looping.
+    try { var AC = window.AudioContext || window.webkitAudioContext; if (AC) this.actx = new AC(); } catch (e) { this.actx = null; }
+    if (this.actx) Object.keys(this.sounds).forEach(function (id) { if (self.sounds[id].loop) self._decode(id); });
     this.ready = true;
-    console.log('[audio] loaded', Object.keys(this.sounds).length, 'sounds');
+    console.log('[audio] loaded', Object.keys(this.sounds).length, 'sounds', this.actx ? '(web audio)' : '');
+  },
+
+  _decode: function (id) {
+    if (!this.actx || this.buffers[id]) return;
+    var self = this; this.buffers[id] = 'loading';
+    fetch(this.sounds[id].src)
+      .then(function (r) { return r.arrayBuffer(); })
+      .then(function (buf) { return self.actx.decodeAudioData(buf); })
+      .then(function (audio) { self.buffers[id] = audio; })
+      .catch(function () { self.buffers[id] = 'failed'; });
   },
 
   // play a one-shot. opts: { volume, rate, minGap (ms) }
@@ -48,24 +65,38 @@ FAB.Audio = {
     } catch (e) {}
   },
 
-  // start a seamless looping sound (e.g. ambient, drive). Idempotent.
+  // start a seamless looping sound (e.g. ambient, belt, drive). Idempotent.
   startLoop: function (id, volume) {
     if (this.loops[id]) return;
     var s = this.sounds[id]; if (!s) return;
+    var vol = volume != null ? volume : s.volume;
+    var buf = this.buffers[id];
+    if (this.actx && buf && buf !== 'loading' && buf !== 'failed') {
+      // gapless Web Audio loop
+      try { if (this.actx.state === 'suspended') this.actx.resume(); } catch (e) {}
+      var src = this.actx.createBufferSource(); src.buffer = buf; src.loop = true;
+      var g = this.actx.createGain(); g.gain.value = this.muted ? 0 : vol;
+      src.connect(g); g.connect(this.actx.destination);
+      try { src.start(0); } catch (e) {}
+      this.loops[id] = { web: true, src: src, gain: g, vol: vol };
+      return;
+    }
+    if (this.actx && !buf) this._decode(id);          // try to upgrade next time
     var a = new Audio(s.src); a.loop = true;
-    a.volume = this.muted ? 0 : (volume != null ? volume : s.volume);
-    this.loops[id] = a;
+    a.volume = this.muted ? 0 : vol;
+    this.loops[id] = { web: false, el: a, vol: vol };
     var p = a.play(); if (p && p.catch) p.catch(function () {});
   },
   stopLoop: function (id) {
-    var a = this.loops[id];
-    if (a) { try { a.pause(); a.currentTime = 0; } catch (e) {} delete this.loops[id]; }
+    var L = this.loops[id]; if (!L) return;
+    try { if (L.web) L.src.stop(); else { L.el.pause(); L.el.currentTime = 0; } } catch (e) {}
+    delete this.loops[id];
   },
 
   setMuted: function (m) {
     this.muted = !!m;
     try { localStorage.setItem('fabrik:muted', m ? '1' : '0'); } catch (e) {}
-    for (var id in this.loops) this.loops[id].volume = m ? 0 : (this.sounds[id] ? this.sounds[id].volume : 0.3);
+    for (var id in this.loops) { var L = this.loops[id]; if (L.web) L.gain.gain.value = m ? 0 : L.vol; else L.el.volume = m ? 0 : L.vol; }
     return this.muted;
   },
   toggleMute: function () { return this.setMuted(!this.muted); }
