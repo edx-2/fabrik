@@ -133,15 +133,27 @@ FAB.Factory.prototype.dropOnBelt = function (belt, item) {
 // A crossing has two lanes: horizontal (dirH = east/west) and vertical
 // (dirV = south/north). Each lane auto-orients to the belt feeding it.
 FAB.Factory.prototype.crossLaneDir = function (e, horiz) {
+  // a belt/bridge neighbour "flows" in direction d if its output goes that way
+  function flows(n, d) {
+    if (!n) return false;
+    if (n.kind === 'belt') return n.dir === d;
+    if (n.kind === 'cross') return ((d & 1) ? n.dirH : n.dirV) === d;
+    return false;
+  }
+  function sink(n) { return n && (n.kind === 'crafter' || n.kind === 'box'); }
   if (horiz) {
     var wl = this.at(e.x - 1, e.y), er = this.at(e.x + 1, e.y);
-    if (wl && wl.kind === 'belt' && wl.dir === 1) return 1; // belt to the west flowing east
-    if (er && er.kind === 'belt' && er.dir === 3) return 3; // belt to the east flowing west
+    if (flows(wl, 1)) return 1;            // west neighbour feeds east INTO us
+    if (flows(er, 3)) return 3;            // east neighbour feeds west INTO us
+    if (flows(er, 1) || sink(er)) return 1; // we OUTPUT east into an east-flowing belt / machine
+    if (flows(wl, 3) || sink(wl)) return 3; // we OUTPUT west
     return e.dirH || 1;
   }
   var up = this.at(e.x, e.y - 1), dn = this.at(e.x, e.y + 1);
-  if (up && up.kind === 'belt' && up.dir === 2) return 2;   // belt above flowing south
-  if (dn && dn.kind === 'belt' && dn.dir === 0) return 0;   // belt below flowing north
+  if (flows(up, 2)) return 2;              // above feeds south INTO us
+  if (flows(dn, 0)) return 0;              // below feeds north INTO us
+  if (flows(dn, 2) || sink(dn)) return 2;  // we OUTPUT south
+  if (flows(up, 0) || sink(up)) return 0;  // we OUTPUT north
   return e.dirV || 2;
 };
 FAB.Factory.prototype.dropOnCross = function (cross, dirIdx, item) {
