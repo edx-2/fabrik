@@ -42,7 +42,7 @@ FAB.Game.prototype.applyUnlocks = function (list) {
 };
 FAB.Game.prototype.rebuildHotbar = function () {
   var order = ['drill', 'belt', 'grabber', 'crossing', 'furnace', 'assembler', 'crusher', 'sawmill', 'pump', 'pipe', 'refinery', 'box', 'road', 'car_factory', 'parking'];
-  this.hotbar = order.filter(function (t) { return this.unlocked[t]; }, this).slice(0, 9);
+  this.hotbar = order.filter(function (t) { return this.unlocked[t]; }, this); // show everything unlocked
 };
 
 // ---------------------------------------------------------------- props (grappler fun)
@@ -764,6 +764,34 @@ FAB.Game.prototype.drawBeltBody = function (ctx, e) {
   var now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
   var frame = (((now * 1.35) % 1) * FAB.BELT_FRAMES) | 0;  // tread phase
   ctx.drawImage(this.beltSprite(shape.type, e.dir, shape.from, frame), sx, sy);
+};
+
+// A small data-URL thumbnail for machines that are drawn procedurally (so the
+// build bar shows what they actually look like instead of a generic emoji).
+FAB.Game.prototype.machineThumb = function (type) {
+  this._thumbs = this._thumbs || {};
+  if (type in this._thumbs) return this._thumbs[type];
+  if (typeof document === 'undefined') { this._thumbs[type] = null; return null; }
+  var T = FAB.TILE, S = 2, url = null;
+  var c = document.createElement('canvas'); c.width = T * S; c.height = T * S;
+  var x = c.getContext('2d'); x.scale(S, S);
+  try {
+    if (type === 'belt') { x.drawImage(this.beltSprite('straight', 1, 3, 0), 0, 0); }
+    else if (type === 'road') {
+      x.fillStyle = '#3c3f46'; x.fillRect(0, 0, T, T); x.fillStyle = '#34373d'; x.fillRect(1, 1, T - 2, T - 2);
+      x.strokeStyle = '#e8c23a'; x.lineWidth = 2; x.setLineDash([4, 4]);
+      x.beginPath(); x.moveTo(0, T / 2); x.lineTo(T, T / 2); x.stroke(); x.setLineDash([]);
+    } else if (type === 'pipe') {
+      var cy = T / 2, W = 13;
+      function ln(w, col) { x.lineWidth = w; x.strokeStyle = col; x.lineCap = 'butt'; x.beginPath(); x.moveTo(0, cy); x.lineTo(T, cy); x.stroke(); }
+      ln(W + 5, 'rgba(0,0,0,0.18)'); ln(W + 2, '#26512f'); ln(W, '#3f8a4e'); ln(W - 6, '#5fae6e'); ln(2, 'rgba(255,255,255,0.18)');
+      x.beginPath(); x.arc(T / 2, cy, W / 2 + 2, 0, 6.283); x.fillStyle = '#3f8a4e'; x.fill(); x.lineWidth = 2; x.strokeStyle = '#26512f'; x.stroke();
+    } else if (type === 'grabber') { this.drawArm(x, { x: 0, y: 0, dir: 1, cooldown: 0, carryItem: null }, 0, 0); }
+    else if (type === 'crossing') { this.drawCross(x, { x: 0, y: 0, dir: 1, dirH: 1, dirV: 2, itemsH: [], itemsV: [] }, 0, 0); }
+    else { this._thumbs[type] = null; return null; }
+    url = c.toDataURL();
+  } catch (e) { url = null; }
+  this._thumbs[type] = url; return url;
 };
 
 // Cached, baked belt body+treads (one image per shape per tread phase) so the

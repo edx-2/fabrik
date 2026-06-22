@@ -13,7 +13,12 @@ FAB.UI = {
     return u ? '<img class="ic-img" src="' + u + '" alt="">' : (emoji || '?');
   },
   itemIcon: function (id) { var it = FAB.ITEMS[id]; return this.assetIcon('item_' + id, it ? it.icon : '?'); },
-  machineIcon: function (t) { var m = FAB.MACHINES[t]; return this.assetIcon('machine_' + t, m ? m.icon : '?'); },
+  machineIcon: function (t) {
+    var m = FAB.MACHINES[t], u = FAB.Assets.url('machine_' + t);
+    if (u) return '<img class="ic-img" src="' + u + '" alt="">';
+    if (this.game && this.game.machineThumb) { var th = this.game.machineThumb(t); if (th) return '<img class="ic-img" src="' + th + '" alt="">'; }
+    return m ? m.icon : '?';
+  },
 
   // ---- boot: show the title / world-select screen -------------------------
   boot: function (canvas) {
@@ -110,7 +115,7 @@ FAB.UI = {
     var g = this.game, html = '';
     g.hotbar.forEach(function (t, i) {
       var m = FAB.MACHINES[t];
-      html += '<div class="slot" data-t="' + t + '"><span class="num">' + (i + 1) + '</span>' +
+      html += '<div class="slot" data-t="' + t + '">' + (i < 9 ? '<span class="num">' + (i + 1) + '</span>' : '') +
         '<span class="ic">' + FAB.UI.machineIcon(t) + '</span><span class="nm">' + m.name + '</span></div>';
     });
     this.el.hotbar.innerHTML = html;

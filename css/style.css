@@ -46,13 +46,15 @@ button:active { transform: translateY(2px); box-shadow: 0 1px 0 #c79a14; }
 .toasts { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; }
 .toast { background: rgba(0,0,0,.7); border-radius: 12px; padding: 8px 16px; font-size: 16px; font-weight: 700; }
 
-.hotbar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 8px; }
-.slot { width: 78px; background: rgba(14,28,44,.9); border: 3px solid #3a5d85; border-radius: 14px;
-  padding: 6px 4px 4px; text-align: center; cursor: pointer; position: relative; }
+.hotbar { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex;
+  flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 96vw; }
+.slot { width: 72px; background: rgba(14,28,44,.9); border: 3px solid #3a5d85; border-radius: 14px;
+  padding: 5px 4px; cursor: pointer; position: relative;
+  display: flex; flex-direction: column; align-items: center; }
 .slot.active { border-color: #ffd54a; background: rgba(60,46,8,.9); }
 .slot .num { position: absolute; top: 2px; left: 6px; font-size: 11px; color: #8fb; }
-.slot .ic { font-size: 26px; line-height: 1; }
-.slot .nm { font-size: 11px; color: #cfe0f2; }
+.slot .ic { font-size: 28px; line-height: 1; height: 32px; display: flex; align-items: center; justify-content: center; }
+.slot .nm { font-size: 11px; color: #cfe0f2; text-align: center; line-height: 1.1; margin-top: 3px; }
 
 /* ---- modal panels (build menu, recipe picker, bag) ---- */
 .modal, .bag { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
