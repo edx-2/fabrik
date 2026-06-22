@@ -41,7 +41,7 @@ FAB.Game.prototype.applyUnlocks = function (list) {
   var self = this; (list || []).forEach(function (t) { self.unlocked[t] = true; });
 };
 FAB.Game.prototype.rebuildHotbar = function () {
-  var order = ['drill', 'belt', 'grabber', 'crossing', 'furnace', 'assembler', 'crusher', 'sawmill', 'pump', 'pipe', 'refinery', 'box', 'car_factory', 'parking'];
+  var order = ['drill', 'belt', 'grabber', 'crossing', 'furnace', 'assembler', 'crusher', 'sawmill', 'pump', 'pipe', 'refinery', 'box', 'road', 'car_factory', 'parking'];
   this.hotbar = order.filter(function (t) { return this.unlocked[t]; }, this).slice(0, 9);
 };
 
@@ -78,24 +78,22 @@ FAB.Game.prototype.canDrive = function (px, py) {
 
 // ---------------------------------------------------------------- car delivery
 FAB.Game.prototype.spawnCar = function (factoryEnt) {
-  var p = this.factory.nearestParking(factoryEnt.x, factoryEnt.y);
-  var px, py;
-  if (p) { px = (p.x + p.size / 2) * FAB.TILE; py = (p.y + p.size / 2) * FAB.TILE; }
-  else { px = (factoryEnt.x + 1) * FAB.TILE; py = (factoryEnt.y + 3) * FAB.TILE; }
-  // scatter multiple cars a little so they do not stack exactly
-  px += (this.cars.length % 3) * 26 - 26;
-  this.cars.push(new FAB.Car(px, py, factoryEnt.carColor, factoryEnt.carKind));
-  // only celebrate the FIRST car of each kind+colour; later identical cars just appear
+  // car emerges from the garage door and drives the road to a free parking spot
+  var del = this.factory.carDelivery(factoryEnt, this);
+  var dt = this.factory.doorTile(factoryEnt);
+  var car = new FAB.Car((dt.x + 0.5) * FAB.TILE, (dt.y + 0.5) * FAB.TILE, factoryEnt.carColor, factoryEnt.carKind);
+  if (del) car.deliver = { parking: del.parking, spotIndex: del.spotIndex, path: del.path, i: 0 };
+  this.cars.push(car);
+  factoryEnt.doorT = (typeof performance !== 'undefined' ? performance.now() : Date.now()); // open the garage
+  // first car of each kind+colour gets a friendly toast + sound (no confetti)
   var key = factoryEnt.carKind + ':' + factoryEnt.carColor;
   this.stats.carVariants = this.stats.carVariants || {};
   if (!this.stats.carVariants[key]) {
     this.stats.carVariants[key] = true;
     var kindName = { basic: 'car', sporty: 'sporty car', super: 'super car' }[factoryEnt.carKind] || 'car';
-    this.toast('🚗 First ' + factoryEnt.carColor + ' ' + kindName + '! Press E to drive.');
+    this.toast('🚗 First ' + factoryEnt.carColor + ' ' + kindName + '! Drive it from the lot (E).');
     FAB.sfx('car_ready');
-    // no confetti per car (it fired for every new colour in milestone 8); confetti
-    // is reserved for milestone completions.
-  }
+  } else FAB.sfx('car_ready', { volume: 0.4 });
 };
 
 // ---------------------------------------------------------------- milestones
@@ -134,6 +132,16 @@ FAB.Game.prototype.update = function (dt) {
   var step = 1 / FAB.TICK_HZ, guard = 0;
   while (this.acc >= step && guard < 6) { this.factory.tick(this); this.acc -= step; guard++; }
 
+  // drive freshly-built cars from the factory door along the road to their spot
+  for (var ci = 0; ci < this.cars.length; ci++) {
+    var c = this.cars[ci]; if (!c.deliver) continue;
+    var wp = c.deliver.path[c.deliver.i];
+    var dx = wp.x - c.x, dy = wp.y - c.y, dd = Math.hypot(dx, dy), sp = 120 * dt;
+    if (dd > 0.001) c.angle = Math.atan2(dy, dx);
+    if (dd <= sp) { c.x = wp.x; c.y = wp.y; if (++c.deliver.i >= c.deliver.path.length) c.deliver = null; }
+    else { c.x += dx / dd * sp; c.y += dy / dd * sp; }
+  }
+
   // camera follows focus
   var f = this.driving || this.player;
   var vw = this.canvas.width, vh = this.canvas.height;
@@ -162,7 +170,7 @@ FAB.Game.prototype.update = function (dt) {
 FAB.Game.prototype.toggleDrive = function () {
   if (this.driving) { this.player.x = this.driving.x; this.player.y = this.driving.y + 8; this.driving = null; this.toast('Got out of the car.'); FAB.sfxStop('drive_loop'); return; }
   var best = null, bd = 70 * 70;
-  for (var i = 0; i < this.cars.length; i++) { var d = FAB.dist2(this.player.x, this.player.y, this.cars[i].x, this.cars[i].y); if (d < bd) { bd = d; best = this.cars[i]; } }
+  for (var i = 0; i < this.cars.length; i++) { if (this.cars[i].deliver) continue; var d = FAB.dist2(this.player.x, this.player.y, this.cars[i].x, this.cars[i].y); if (d < bd) { bd = d; best = this.cars[i]; } }
   if (best) { this.driving = best; this.toast('Vroom! Arrows to drive' + (best.hasGrappler ? ', F = grappler' : '') + '. E to get out.'); FAB.sfxLoop('drive_loop'); }
 };
 
@@ -184,8 +192,8 @@ FAB.Game.prototype.handleBuild = function () {
   // remove with X or right-click
   if ((inp.pressed('remove') || inp.mouse.clickR)) this.removeAt(mt.x, mt.y);
 
-  // belts & pipes can be click-and-DRAGGED to draw long runs
-  var draggable = this.buildType === 'belt' || this.buildType === 'pipe';
+  // belts, pipes & roads can be click-and-DRAGGED to draw long runs
+  var draggable = this.buildType === 'belt' || this.buildType === 'pipe' || this.buildType === 'road';
 
   if (inp.mouse.clickL) {
     if (this.buildType && draggable) {
@@ -505,6 +513,9 @@ FAB.Game.prototype.drawEntity = function (ctx, e) {
   if (e.kind === 'pipe') { this.drawPipe(ctx, e, sx, sy); return; }
   if (e.kind === 'cross') { this.drawCross(ctx, e, sx, sy); return; }
   if (e.kind === 'arm') { this.drawArm(ctx, e, sx, sy); return; }
+  if (e.kind === 'road') { this.drawRoad(ctx, e, sx, sy); return; }
+  if (e.kind === 'parking') { this.drawParking(ctx, e, sx, sy, sz); return; }
+  if (e.type === 'car_factory') { this.drawCarFactory(ctx, e, sx, sy, sz); return; }
 
   // generic machine box
   if (!FAB.Assets.draw(ctx, 'machine_' + e.type, sx, sy, sz, sz, 0))
@@ -607,6 +618,80 @@ FAB.Game.prototype.drawCrossLane = function (ctx, e, sx, sy, horiz) {
       FAB.Placeholder.token(ctx, ix, iy, 8, item.color, item.icon);
   }
   ctx.restore();
+};
+
+// road tile: asphalt with yellow dashed markings toward each connected neighbour
+FAB.Game.prototype.drawRoad = function (ctx, e, sx, sy) {
+  var T = FAB.TILE, f = this.factory, cx = sx + T / 2, cy = sy + T / 2;
+  ctx.fillStyle = '#3c3f46'; ctx.fillRect(sx, sy, T, T);
+  ctx.fillStyle = '#34373d'; ctx.fillRect(sx + 1, sy + 1, T - 2, T - 2);
+  ctx.strokeStyle = '#e8c23a'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+  var any = false;
+  for (var d = 0; d < 4; d++) {
+    var n = f.at(e.x + FAB.DIR[d].x, e.y + FAB.DIR[d].y);
+    if (n && (n.kind === 'road' || n.kind === 'parking' || n.type === 'car_factory')) {
+      any = true; var dd = FAB.DIR[d];
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + dd.x * T * 0.5, cy + dd.y * T * 0.5); ctx.stroke();
+    }
+  }
+  ctx.setLineDash([]);
+  if (!any) { ctx.fillStyle = '#e8c23a'; ctx.beginPath(); ctx.arc(cx, cy, 2, 0, 6.283); ctx.fill(); }
+};
+
+// 4x4 parking lot: asphalt with four marked spaces and a P sign
+FAB.Game.prototype.drawParking = function (ctx, e, sx, sy, sz) {
+  var T = FAB.TILE;
+  ctx.fillStyle = '#33363d'; FAB.roundRect(ctx, sx + 1, sy + 1, sz - 2, sz - 2, 6); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = '#5a6068'; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,0.65)'; ctx.lineWidth = 2;
+  for (var idx = 0; idx < 4; idx++) {
+    var col = idx % 2, row = (idx / 2) | 0;
+    ctx.strokeRect(sx + col * 2 * T + T * 0.35, sy + row * 2 * T + T * 0.35, T * 1.3, T * 1.3);
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('🅿️', sx + 4, sy + 3);
+};
+
+// 4x4 car factory: pink building with an animated garage door on its facing side
+FAB.Game.prototype.drawCarFactory = function (ctx, e, sx, sy, sz) {
+  var T = FAB.TILE;
+  ctx.fillStyle = '#b02a7a'; FAB.roundRect(ctx, sx + 2, sy + 2, sz - 4, sz - 4, 8); ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.16)'; FAB.roundRect(ctx, sx + 7, sy + 7, sz - 14, T * 0.7, 4); ctx.fill();
+  ctx.font = Math.floor(T * 0.7) + 'px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('🏭', sx + sz / 2, sy + T * 0.55);
+
+  // garage door rectangle on the facing (dir) edge, over the two centre tiles
+  var depth = T * 1.15, len = 2 * T, dx, dy, dw, dh;
+  if (e.dir === 2) { dx = sx + T; dy = sy + sz - depth; dw = len; dh = depth; }
+  else if (e.dir === 0) { dx = sx + T; dy = sy; dw = len; dh = depth; }
+  else if (e.dir === 1) { dx = sx + sz - depth; dy = sy + T; dw = depth; dh = len; }
+  else { dx = sx; dy = sy + T; dw = depth; dh = len; }
+  ctx.fillStyle = '#15161a'; ctx.fillRect(dx, dy, dw, dh);              // dark interior
+  var now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  var open = 0;
+  if (e.doorT != null) { var t = (now - e.doorT) / 1000; if (t >= 0 && t < 2) open = t < 0.5 ? t / 0.5 : (t < 1.5 ? 1 : 1 - (t - 1.5) / 0.5); }
+  var cov = 1 - open;
+  ctx.fillStyle = '#cf5aa6';                                            // door slab retracting toward interior
+  if (e.dir === 2) ctx.fillRect(dx, dy, dw, dh * cov);
+  else if (e.dir === 0) ctx.fillRect(dx, dy + dh * open, dw, dh * cov);
+  else if (e.dir === 1) ctx.fillRect(dx, dy, dw * cov, dh);
+  else ctx.fillRect(dx + dw * open, dy, dw * cov, dh);
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.strokeRect(dx, dy, dw, dh);
+
+  // colour chip: shows what colour this factory is set to build
+  var hex = '#e74c3c';
+  for (var i = 0; i < FAB.CAR_COLORS.length; i++) if (FAB.CAR_COLORS[i].id === e.carColor) hex = FAB.CAR_COLORS[i].hex;
+  FAB.roundRect(ctx, sx + 4, sy + sz - 22, 36, 18, 5); ctx.fillStyle = 'rgba(255,255,255,0.92)'; ctx.fill();
+  ctx.fillStyle = hex; ctx.beginPath(); ctx.arc(sx + 13, sy + sz - 13, 6, 0, 6.283); ctx.fill();
+  ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.stroke();
+  ctx.font = '12px serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('🚗', sx + 22, sy + sz - 13);
+
+  if (e.progress > 0 && e.startTime) {
+    var pr = 1 - e.progress / e.startTime;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(sx + 4, sy + 4, sz - 8, 4);
+    ctx.fillStyle = '#7be37b'; ctx.fillRect(sx + 4, sy + 4, (sz - 8) * pr, 4);
+  }
 };
 
 FAB.Game.prototype.drawDirArrow = function (ctx, e, sx, sy, sz) {

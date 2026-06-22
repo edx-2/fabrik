@@ -120,8 +120,9 @@ FAB.MACHINES = {
   pump:        { name: 'Oil Pump',     icon: '⛽', kind: 'pump',    color: '#445', rotates: true, unlock: 4 },
   pipe:        { name: 'Pipe',         icon: '🟢', kind: 'pipe',    color: '#3a7d44', unlock: 4 },
   refinery:    { name: 'Refinery',     icon: '🛢️', kind: 'refinery',color: '#5a4a6a', inputs: 1, unlock: 4 },
-  car_factory: { name: 'Car Factory',  icon: '🏭', kind: 'crafter', color: '#b02a7a', inputs: 6, unlock: 7, size: 2 },
-  parking:     { name: 'Parking Lot',  icon: '🅿️', kind: 'parking', color: '#3d4756', unlock: 7, size: 2 }
+  car_factory: { name: 'Car Factory',  icon: '🏭', kind: 'crafter', color: '#b02a7a', inputs: 6, unlock: 7, size: 4, rotates: true },
+  parking:     { name: 'Parking Lot',  icon: '🅿️', kind: 'parking', color: '#3d4756', unlock: 7, size: 4 },
+  road:        { name: 'Road',         icon: '🛣️', kind: 'road',    color: '#565b64', unlock: 7 }
 };
 
 // Tiny hand-craft bootstrap recipes (made from the backpack, no machine).
@@ -176,8 +177,8 @@ FAB.MILESTONES = [
   { n: 6, title: 'Strong Body', blurb: 'Build a Chassis.',
     unlock: [],
     goal: function (g) { return { have: produced(g, 'chassis'), need: 1, label: 'Chassis' }; } },
-  { n: 7, title: 'Paint & Go!', blurb: 'Build a Car Factory and make your first Car. Then drive it!',
-    unlock: ['car_factory', 'parking'],
+  { n: 7, title: 'Paint & Go!', blurb: 'Build a Car Factory + Parking Lot, link them with a Road, then make your first Car!',
+    unlock: ['car_factory', 'parking', 'road'],
     goal: function (g) { return { have: produced(g, 'car'), need: 1, label: 'Car' }; } },
   { n: 8, title: 'Open for Business', blurb: 'Make cars in 3 different colors.',
     unlock: [],

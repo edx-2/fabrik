@@ -123,7 +123,7 @@ FAB.UI = {
   // ---- build menu (full grid, shows locked items) -------------------------
   toggleBuildMenu: function () {
     if (!this.el.modal.classList.contains('hidden') && this.el.modal.dataset.kind === 'build') { this.closeModal(); return; }
-    var g = this.game, order = ['drill', 'furnace', 'belt', 'grabber', 'crossing', 'box', 'assembler', 'crusher', 'sawmill', 'pump', 'pipe', 'refinery', 'car_factory', 'parking'];
+    var g = this.game, order = ['drill', 'furnace', 'belt', 'grabber', 'crossing', 'box', 'assembler', 'crusher', 'sawmill', 'pump', 'pipe', 'refinery', 'road', 'car_factory', 'parking'];
     var html = '<h2>🧰 Build</h2><div class="grid">';
     order.forEach(function (t) {
       var m = FAB.MACHINES[t], lk = !g.unlocked[t];

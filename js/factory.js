@@ -303,6 +303,8 @@ FAB.Factory.prototype.tick = function (game) {
     // can we start?
     var outItem = r.out && typeof r.out === 'string' ? r.out : e.recipe;
     if ((e.outBuf[outItem] || 0) >= OUT_CAP) return;
+    // a car factory only builds when it's road-linked to a parking lot with a free spot
+    if (e.type === 'car_factory' && !self.carDelivery(e, game)) return;
     var grp = null;
     for (var i = 0; i < r.inputs.length; i++) {
       var item = r.inputs[i][0], qty = r.inputs[i][1];
@@ -333,6 +335,68 @@ FAB.Factory.prototype.finishCraft = function (e, r, game) {
   var firstEver = !game.stats.produced[outItem];   // the very first time you craft this product
   game.onProduced(outItem, qty);
   if (firstEver) FAB.sfx('craft', { volume: 0.55 }); // once per product type, not for repeats
+};
+
+// the tile just outside a car factory's garage door (front-centre, by facing)
+FAB.Factory.prototype.doorTile = function (e) {
+  var s = e.size;
+  switch (e.dir) {
+    case 0: return { x: e.x + 1, y: e.y - 1 };   // up
+    case 1: return { x: e.x + s, y: e.y + 1 };   // right
+    case 2: return { x: e.x + 1, y: e.y + s };   // down
+    default: return { x: e.x - 1, y: e.y + 1 };  // left
+  }
+};
+// pixel centre of parking spot `idx` (0..3) — a 2x2 grid of spaces in the 4x4 lot
+FAB.Factory.prototype.spotCenter = function (e, idx) {
+  var T = FAB.TILE, col = idx % 2, row = (idx / 2) | 0;
+  return { x: (e.x + col * 2 + 1) * T, y: (e.y + row * 2 + 1) * T };
+};
+FAB.Factory.prototype.PARK_SPOTS = 4;
+// first free spot index in a lot (a spot is taken by a parked car or one en route)
+FAB.Factory.prototype.freeSpot = function (e, game) {
+  var T = FAB.TILE, r2 = (T * 0.8) * (T * 0.8);
+  for (var idx = 0; idx < this.PARK_SPOTS; idx++) {
+    var c = this.spotCenter(e, idx), taken = false;
+    for (var i = 0; i < game.cars.length; i++) {
+      var car = game.cars[i];
+      if (car.deliver) { if (car.deliver.parking === e && car.deliver.spotIndex === idx) { taken = true; break; } }
+      else if (FAB.dist2(car.x, car.y, c.x, c.y) < r2) { taken = true; break; }
+    }
+    if (!taken) return idx;
+  }
+  return -1;
+};
+// BFS over road tiles from the factory door to a parking lot that has a free spot.
+// Returns { parking, spotIndex, path:[pixel waypoints] } or null.
+FAB.Factory.prototype.carDelivery = function (e, game) {
+  var door = this.doorTile(e), start = this.at(door.x, door.y);
+  if (!start || start.kind !== 'road') return null;
+  var T = FAB.TILE, startK = FAB.key(door.x, door.y), prev = {}; prev[startK] = null;
+  var q = [door], qi = 0;
+  while (qi < q.length) {
+    var cur = q[qi++], curK = FAB.key(cur.x, cur.y);
+    for (var d = 0; d < 4; d++) {
+      var pe = this.at(cur.x + FAB.DIR[d].x, cur.y + FAB.DIR[d].y);
+      if (pe && pe.kind === 'parking') {
+        var spot = this.freeSpot(pe, game);
+        if (spot >= 0) {
+          var path = [], k = curK;
+          while (k !== null && k !== undefined) { var p = k.split(',').map(Number); path.push({ x: (p[0] + 0.5) * T, y: (p[1] + 0.5) * T }); k = prev[k]; }
+          path.reverse();
+          var sc = this.spotCenter(pe, spot); path.push({ x: sc.x, y: sc.y });
+          return { parking: pe, spotIndex: spot, path: path };
+        }
+      }
+    }
+    for (var d2 = 0; d2 < 4; d2++) {
+      var rx = cur.x + FAB.DIR[d2].x, ry = cur.y + FAB.DIR[d2].y, rk = FAB.key(rx, ry);
+      if (rk in prev) continue;
+      var re = this.at(rx, ry);
+      if (re && re.kind === 'road') { prev[rk] = curK; q.push({ x: rx, y: ry }); }
+    }
+  }
+  return null;
 };
 
 // nearest parking-lot entity to a position (for car delivery)
