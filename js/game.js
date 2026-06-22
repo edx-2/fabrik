@@ -327,15 +327,19 @@ FAB.Game.prototype.render = function () {
     else { var dec = this.world.decor[FAB.key(x, y)]; if (dec) { ctx.font = '20px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(dec, x * T - cam.x + T / 2, y * T - cam.y + T / 2); } }
   }
 
-  // factory entities, drawn in layers so nothing covers belt cargo:
-  //   1) all belt BODIES   2) all belt ITEMS   3) machines/pipes/arms on top
-  var self = this, belts = [], others = [];
+  // factory entities, drawn in layers so nothing covers belt/bridge cargo:
+  //   1) belt + bridge BODIES   2) belt + bridge ITEMS   3) machines/pipes/arms.
+  // Bridges share the belt layers so an item arriving on the incoming belt isn't
+  // hidden under the bridge body (it lines up with the items already on the bridge).
+  var self = this, T = FAB.TILE, cam = this.cam, belts = [], crosses = [], others = [];
   this.factory.eachEntity(function (e) {
     if (e.x + e.size < x0 || e.x > x1 || e.y + e.size < y0 || e.y > y1) return;
-    if (e.kind === 'belt') belts.push(e); else others.push(e);
+    if (e.kind === 'belt') belts.push(e); else if (e.kind === 'cross') crosses.push(e); else others.push(e);
   });
   belts.forEach(function (e) { self.drawBeltBody(ctx, e); });
+  crosses.forEach(function (e) { self.drawCrossBody(ctx, e, e.x * T - cam.x, e.y * T - cam.y); });
   belts.forEach(function (e) { self.drawBeltItems(ctx, e); });
+  crosses.forEach(function (e) { self.drawCrossItems(ctx, e, e.x * T - cam.x, e.y * T - cam.y); });
   others.forEach(function (e) { self.drawEntity(ctx, e); });
 
   // props
@@ -606,14 +610,33 @@ FAB.Game.prototype.drawPipe = function (ctx, e, sx, sy) {
 // drawn as an overpass (with a shadow) over the horizontal one, so the two flows
 // visibly cross without mixing. Items on each lane ride independently.
 FAB.Game.prototype.drawCross = function (ctx, e, sx, sy) {
-  this.drawCrossLane(ctx, e, sx, sy, true);    // horizontal lane (underneath)
-  this.drawCrossLane(ctx, e, sx, sy, false);   // vertical lane (the overpass)
+  this.drawCrossBody(ctx, e, sx, sy);
+  this.drawCrossItems(ctx, e, sx, sy);
 };
-FAB.Game.prototype.drawCrossLane = function (ctx, e, sx, sy, horiz) {
+// the two lane BODIES (horizontal under the vertical overpass), no cargo
+FAB.Game.prototype.drawCrossBody = function (ctx, e, sx, sy) {
+  this._crossLane(ctx, e, sx, sy, true, false);
+  this._crossLane(ctx, e, sx, sy, false, false);
+};
+// the cargo on both lanes — drawn in the belt-ITEMS pass so incoming items line up
+FAB.Game.prototype.drawCrossItems = function (ctx, e, sx, sy) {
+  this._crossLane(ctx, e, sx, sy, true, true);
+  this._crossLane(ctx, e, sx, sy, false, true);
+};
+FAB.Game.prototype._crossLane = function (ctx, e, sx, sy, horiz, itemsPass) {
   var T = FAB.TILE, cx = sx + T / 2, cy = sy + T / 2;
-  var fh = Math.round(T * 0.45), sh = Math.round(T * 0.30);   // frame/surface half-widths == belts
   var dirIdx = horiz ? (e.dirH == null ? 1 : e.dirH) : (e.dirV == null ? 2 : e.dirV), d = FAB.DIR[dirIdx]; // dir 0 (north) is falsy — don't use ||
   var items = horiz ? (e.itemsH || []) : (e.itemsV || []);
+  if (itemsPass) {
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i], item = FAB.ITEMS[it.item];
+      var ix = cx + d.x * (it.pos - 0.5) * T, iy = cy + d.y * (it.pos - 0.5) * T;
+      if (!FAB.Assets.draw(ctx, 'item_' + it.item, ix - 9, iy - 9, 18, 18, 0))
+        FAB.Placeholder.token(ctx, ix, iy, 8, item.color, item.icon);
+    }
+    return;
+  }
+  var fh = Math.round(T * 0.45), sh = Math.round(T * 0.30);   // frame/surface half-widths == belts
   var now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
   ctx.save();
   if (!horiz) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(cx - fh - 2, sy, (fh + 2) * 2, T); } // overpass shadow
@@ -628,13 +651,6 @@ FAB.Game.prototype.drawCrossLane = function (ctx, e, sx, sy, horiz) {
     if (horiz) { ctx.moveTo(px, cy - sh + 1); ctx.lineTo(px, cy + sh - 1); }
     else { ctx.moveTo(cx - sh + 1, py); ctx.lineTo(cx + sh - 1, py); }
     ctx.stroke();
-  }
-  // items
-  for (var i = 0; i < items.length; i++) {
-    var it = items[i], item = FAB.ITEMS[it.item];
-    var ix = cx + d.x * (it.pos - 0.5) * T, iy = cy + d.y * (it.pos - 0.5) * T;
-    if (!FAB.Assets.draw(ctx, 'item_' + it.item, ix - 9, iy - 9, 18, 18, 0))
-      FAB.Placeholder.token(ctx, ix, iy, 8, item.color, item.icon);
   }
   ctx.restore();
 };
