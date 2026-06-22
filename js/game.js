@@ -237,7 +237,19 @@ FAB.Game.prototype.placeLine = function (x, y, dir) {
   var t = this.dragType;
   if (!this.unlocked[t]) return;
   var existing = this.factory.at(x, y);
-  if (existing) { if (existing.type === t && existing.kind === 'belt') existing.dir = dir; return; }
+  if (existing) {
+    // dragging a belt across a PERPENDICULAR belt -> auto-build a Belt Bridge
+    if (t === 'belt' && existing.kind === 'belt' && this.unlocked.crossing && ((existing.dir & 1) !== (dir & 1))) {
+      var od = existing.dir;
+      this.factory.remove(x, y);
+      var cr = this.factory.place('crossing', x, y, 0, this.world);
+      if (cr) { if (od & 1) { cr.dirH = od; cr.dirV = dir; } else { cr.dirV = od; cr.dirH = dir; } }
+      FAB.sfx('place', { minGap: 70, volume: 0.5 });
+      return;
+    }
+    if (existing.type === t && existing.kind === 'belt') existing.dir = dir; // re-orient a parallel belt
+    return;
+  }
   if (this.factory.canPlace(t, x, y, this.world)) {
     this.factory.place(t, x, y, FAB.MACHINES[t].rotates ? dir : 0, this.world);
     FAB.sfx('place', { minGap: 70, volume: 0.4, rate: 1.05 }); // soft rhythmic tick while dragging
@@ -592,22 +604,23 @@ FAB.Game.prototype.drawCross = function (ctx, e, sx, sy) {
   this.drawCrossLane(ctx, e, sx, sy, false);   // vertical lane (the overpass)
 };
 FAB.Game.prototype.drawCrossLane = function (ctx, e, sx, sy, horiz) {
-  var T = FAB.TILE, cx = sx + T / 2, cy = sy + T / 2, half = Math.round(T * 0.32);
+  var T = FAB.TILE, cx = sx + T / 2, cy = sy + T / 2;
+  var fh = Math.round(T * 0.45), sh = Math.round(T * 0.30);   // frame/surface half-widths == belts
   var dirIdx = horiz ? (e.dirH || 1) : (e.dirV || 2), d = FAB.DIR[dirIdx];
   var items = horiz ? (e.itemsH || []) : (e.itemsV || []);
   var now = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
   ctx.save();
-  if (!horiz) { ctx.fillStyle = 'rgba(0,0,0,0.22)'; ctx.fillRect(cx - half - 2, sy + 1, (half + 2) * 2, T - 2); } // overpass shadow
-  var x0 = horiz ? sx : cx - half, y0 = horiz ? cy - half : sy, w = horiz ? T : half * 2, h = horiz ? half * 2 : T;
-  ctx.fillStyle = '#23262d'; ctx.fillRect(x0, y0, w, h);              // frame
-  ctx.fillStyle = '#34373e'; ctx.fillRect(x0 + 2, y0 + 2, w - 4, h - 4); // belt surface
-  // animated treads along the lane direction
-  ctx.strokeStyle = '#646b78'; ctx.lineWidth = 3;
+  if (!horiz) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(cx - fh - 2, sy, (fh + 2) * 2, T); } // overpass shadow
+  // belt-width frame + rubber surface so straight/curved belts attach flush
+  if (horiz) { ctx.fillStyle = '#22252b'; ctx.fillRect(sx, cy - fh, T, fh * 2); ctx.fillStyle = '#2f333b'; ctx.fillRect(sx, cy - sh, T, sh * 2); }
+  else { ctx.fillStyle = '#22252b'; ctx.fillRect(cx - fh, sy, fh * 2, T); ctx.fillStyle = '#2f333b'; ctx.fillRect(cx - sh, sy, sh * 2, T); }
+  // animated treads across the rubber surface
+  ctx.strokeStyle = '#646b78'; ctx.lineWidth = 4;
   for (var k = 0; k < 4; k++) {
     var p = ((k / 4) + now * 1.35) % 1, px = cx + d.x * (p - 0.5) * T, py = cy + d.y * (p - 0.5) * T;
     ctx.beginPath();
-    if (horiz) { ctx.moveTo(px, cy - half + 2); ctx.lineTo(px, cy + half - 2); }
-    else { ctx.moveTo(cx - half + 2, py); ctx.lineTo(cx + half - 2, py); }
+    if (horiz) { ctx.moveTo(px, cy - sh + 1); ctx.lineTo(px, cy + sh - 1); }
+    else { ctx.moveTo(cx - sh + 1, py); ctx.lineTo(cx + sh - 1, py); }
     ctx.stroke();
   }
   // items
@@ -726,7 +739,11 @@ FAB.Game.prototype.beltShape = function (e) {
   var D = e.dir, back = (D + 2) & 3, left = (D + 3) & 3, right = (D + 1) & 3, f = this.factory;
   function feeds(k, want) {
     var n = f.at(e.x + FAB.DIR[k].x, e.y + FAB.DIR[k].y);
-    return n && n.kind === 'belt' && n.dir === want;
+    if (!n) return false;
+    if (n.kind === 'belt') return n.dir === want;
+    // a belt bridge feeds us if its lane on the matching axis flows our way
+    if (n.kind === 'cross') return ((want & 1) ? n.dirH : n.dirV) === want;
+    return false;
   }
   var straight = feeds(back, D);
   var leftFeed = feeds(left, right);   // belt on our left pointing across into us

@@ -222,11 +222,12 @@ FAB.Factory.prototype.tick = function (game) {
     e.anim++;
   });
 
-  // 2a) crossings: orient each lane to the belts feeding it (before items move)
+  // 2a) crossings: orient each lane to the belts feeding it (before items move).
+  // If a lane flips, bump structVer so neighbouring belts re-evaluate their corners.
   list.forEach(function (e) {
     if (e.kind !== 'cross') return;
-    e.dirH = self.crossLaneDir(e, true);
-    e.dirV = self.crossLaneDir(e, false);
+    var nh = self.crossLaneDir(e, true), nv = self.crossLaneDir(e, false);
+    if (nh !== e.dirH || nv !== e.dirV) { e.dirH = nh; e.dirV = nv; self.structVer++; }
     e.anim++;
   });
   // 2b) belts advance items along their direction
