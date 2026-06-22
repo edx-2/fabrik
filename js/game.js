@@ -93,7 +93,8 @@ FAB.Game.prototype.spawnCar = function (factoryEnt) {
     var kindName = { basic: 'car', sporty: 'sporty car', super: 'super car' }[factoryEnt.carKind] || 'car';
     this.toast('🚗 First ' + factoryEnt.carColor + ' ' + kindName + '! Press E to drive.');
     FAB.sfx('car_ready');
-    this.celebrate = 1.5;
+    // no confetti per car (it fired for every new colour in milestone 8); confetti
+    // is reserved for milestone completions.
   }
 };
 
@@ -801,13 +802,17 @@ FAB.Game.prototype.drawPlayer = function (ctx) {
 FAB.Game.prototype.drawCar = function (ctx, c) {
   var sx = c.x - this.cam.x, sy = c.y - this.cam.y;
   ctx.save(); ctx.translate(sx, sy); ctx.rotate(c.angle + Math.PI / 2);
-  if (!FAB.Assets.draw(ctx, 'car_' + c.kind, -18, -28, 36, 56, 0)) {
-    ctx.fillStyle = c.colorHex(); FAB.roundRect(ctx, -14, -24, 28, 48, 8); ctx.fill();
-    ctx.fillStyle = 'rgba(180,230,255,0.85)'; FAB.roundRect(ctx, -10, -16, 20, 12, 4); ctx.fill();
-    ctx.fillStyle = '#222'; ctx.fillRect(-16, -18, 4, 10); ctx.fillRect(12, -18, 4, 10); ctx.fillRect(-16, 8, 4, 10); ctx.fillRect(12, 8, 4, 10);
-    if (c.hasSpoiler) { ctx.fillStyle = '#111'; ctx.fillRect(-14, 22, 28, 5); }
-    if (c.hasGrappler) { ctx.fillStyle = '#d23b3b'; ctx.beginPath(); ctx.arc(0, -26, 5, 0, Math.PI * 2); ctx.fill(); }
-  }
+  // Draw a vector car tinted to the chosen colour. (The generated car sprites are
+  // a fixed red, so using them would make every car red regardless of selection.)
+  var hex = c.colorHex();
+  ctx.fillStyle = '#222'; ctx.fillRect(-16, -18, 4, 10); ctx.fillRect(12, -18, 4, 10); ctx.fillRect(-16, 8, 4, 10); ctx.fillRect(12, 8, 4, 10); // wheels
+  ctx.fillStyle = hex; FAB.roundRect(ctx, -14, -24, 28, 48, 8); ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.stroke();
+  ctx.fillStyle = 'rgba(0,0,0,0.12)'; FAB.roundRect(ctx, -11, -4, 22, 16, 4); ctx.fill(); // roof shade
+  ctx.fillStyle = 'rgba(190,235,255,0.9)'; FAB.roundRect(ctx, -10, -16, 20, 11, 4); ctx.fill(); // windshield
+  ctx.fillStyle = '#fff3b0'; ctx.beginPath(); ctx.arc(-9, -23, 1.8, 0, Math.PI * 2); ctx.arc(9, -23, 1.8, 0, Math.PI * 2); ctx.fill(); // headlights
+  if (c.hasSpoiler) { ctx.fillStyle = '#111'; ctx.fillRect(-14, 22, 28, 5); }
+  if (c.hasGrappler) { ctx.fillStyle = '#d23b3b'; ctx.beginPath(); ctx.arc(0, -26, 5, 0, Math.PI * 2); ctx.fill(); }
   ctx.restore();
 };
 
