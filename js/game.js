@@ -652,32 +652,48 @@ FAB.Game.prototype.drawParking = function (ctx, e, sx, sy, sz) {
   ctx.fillText('🅿️', sx + 4, sy + 3);
 };
 
-// 4x4 car factory: pink building with an animated garage door on its facing side
+// 4x4 car factory: the generated building (rotated to face e.dir) with an animated
+// garage door overlaid on the facing edge. Falls back to a procedural building.
 FAB.Game.prototype.drawCarFactory = function (ctx, e, sx, sy, sz) {
   var T = FAB.TILE;
-  ctx.fillStyle = '#b02a7a'; FAB.roundRect(ctx, sx + 2, sy + 2, sz - 4, sz - 4, 8); ctx.fill();
-  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.16)'; FAB.roundRect(ctx, sx + 7, sy + 7, sz - 14, T * 0.7, 4); ctx.fill();
-  ctx.font = Math.floor(T * 0.7) + 'px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('🏭', sx + sz / 2, sy + T * 0.55);
-
-  // garage door rectangle on the facing (dir) edge, over the two centre tiles
-  var depth = T * 1.15, len = 2 * T, dx, dy, dw, dh;
-  if (e.dir === 2) { dx = sx + T; dy = sy + sz - depth; dw = len; dh = depth; }
-  else if (e.dir === 0) { dx = sx + T; dy = sy; dw = len; dh = depth; }
-  else if (e.dir === 1) { dx = sx + sz - depth; dy = sy + T; dw = depth; dh = len; }
-  else { dx = sx; dy = sy + T; dw = depth; dh = len; }
-  ctx.fillStyle = '#15161a'; ctx.fillRect(dx, dy, dw, dh);              // dark interior
   var now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   var open = 0;
   if (e.doorT != null) { var t = (now - e.doorT) / 1000; if (t >= 0 && t < 2) open = t < 0.5 ? t / 0.5 : (t < 1.5 ? 1 : 1 - (t - 1.5) / 0.5); }
-  var cov = 1 - open;
-  ctx.fillStyle = '#cf5aa6';                                            // door slab retracting toward interior
-  if (e.dir === 2) ctx.fillRect(dx, dy, dw, dh * cov);
-  else if (e.dir === 0) ctx.fillRect(dx, dy + dh * open, dw, dh * cov);
-  else if (e.dir === 1) ctx.fillRect(dx, dy, dw * cov, dh);
-  else ctx.fillRect(dx + dw * open, dy, dw * cov, dh);
-  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.strokeRect(dx, dy, dw, dh);
+  var depth = T * 1.15, len = 2 * T;
+
+  if (FAB.Assets.has('machine_car_factory')) {
+    // draw the building rotated so its (bottom-edge) door faces e.dir, then overlay
+    // the animated door at that same bottom edge in the rotated frame
+    ctx.save();
+    ctx.translate(sx + sz / 2, sy + sz / 2);
+    ctx.rotate((e.dir - 2) * Math.PI / 2);
+    FAB.Assets.draw(ctx, 'machine_car_factory', -sz / 2, -sz / 2, sz, sz, 0);
+    var dxl = -T, dyl = sz / 2 - depth;
+    ctx.fillStyle = '#15161a'; ctx.fillRect(dxl, dyl, len, depth);                  // interior
+    ctx.fillStyle = '#cf5aa6'; ctx.fillRect(dxl, dyl, len, depth * (1 - open));     // slab retracts up
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.strokeRect(dxl, dyl, len, depth);
+    ctx.restore();
+  } else {
+    // procedural pink building with a door on the facing edge
+    ctx.fillStyle = '#b02a7a'; FAB.roundRect(ctx, sx + 2, sy + 2, sz - 4, sz - 4, 8); ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.16)'; FAB.roundRect(ctx, sx + 7, sy + 7, sz - 14, T * 0.7, 4); ctx.fill();
+    ctx.font = Math.floor(T * 0.7) + 'px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('🏭', sx + sz / 2, sy + T * 0.55);
+    var dx, dy, dw, dh;
+    if (e.dir === 2) { dx = sx + T; dy = sy + sz - depth; dw = len; dh = depth; }
+    else if (e.dir === 0) { dx = sx + T; dy = sy; dw = len; dh = depth; }
+    else if (e.dir === 1) { dx = sx + sz - depth; dy = sy + T; dw = depth; dh = len; }
+    else { dx = sx; dy = sy + T; dw = depth; dh = len; }
+    ctx.fillStyle = '#15161a'; ctx.fillRect(dx, dy, dw, dh);
+    var cov = 1 - open;
+    ctx.fillStyle = '#cf5aa6';
+    if (e.dir === 2) ctx.fillRect(dx, dy, dw, dh * cov);
+    else if (e.dir === 0) ctx.fillRect(dx, dy + dh * open, dw, dh * cov);
+    else if (e.dir === 1) ctx.fillRect(dx, dy, dw * cov, dh);
+    else ctx.fillRect(dx + dw * open, dy, dw * cov, dh);
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.strokeRect(dx, dy, dw, dh);
+  }
 
   // colour chip: shows what colour this factory is set to build
   var hex = '#e74c3c';

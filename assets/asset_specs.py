@@ -135,7 +135,7 @@ SPECS += [
     _machine("sawmill", "sawmill", "A wooden machine with a round saw blade cutting logs into planks."),
     _machine("pump", "oil pump", "A pumpjack that nods up and down to pull up dark oil, on a metal base."),
     _machine("refinery", "oil refinery", "A purple refinery with tanks and pipes turning oil into materials."),
-    _machine("car_factory", "car factory", "A big cheerful pink factory building with a roll-up door and a car silhouette, smokestacks.", cell=128),
+    _machine("car_factory", "car factory", "A big cheerful pink factory building, top-down, with smokestacks and a sign on the roof. A wide rectangular GARAGE DOOR is centered on the BOTTOM edge of the building (facing the bottom of the image). No cars in the picture, no road.", cell=256),
     _machine("box", "storage box", "A simple wooden storage crate with metal corners, lid open showing it can hold items."),
 ]
 
