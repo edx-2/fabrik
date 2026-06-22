@@ -115,6 +115,7 @@ FAB.Game.prototype.checkMilestone = function () {
     this.toast('🎉 Milestone ' + m.n + ' complete: ' + m.title + '!');
     FAB.sfx('milestone');
     FAB.Save.save(this);
+    if (nm && FAB.UI && FAB.UI.maybeTutorial) FAB.UI.maybeTutorial(this, nm.n); // tutorial for new features
   }
 };
 

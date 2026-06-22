@@ -108,6 +108,39 @@ FAB.UI = {
     this.renderHotbar();
     this.game.start();
     FAB.sfxLoop('ambient'); // background ambience (the New World click already unlocked audio)
+    var cm = this.game.currentMilestone(); if (cm) this.maybeTutorial(this.game, cm.n);
+  },
+
+  // ---- feature tutorials (shown once when a milestone's features unlock) ---
+  maybeTutorial: function (game, n) {
+    if (!FAB.TUTORIALS || !FAB.TUTORIALS[n]) return;
+    game.stats.tutorialsSeen = game.stats.tutorialsSeen || {};
+    if (game.stats.tutorialsSeen[n]) return;
+    this._tut = { game: game, pages: FAB.TUTORIALS[n], key: n, i: 0 };
+    this.renderTutorial(true);
+  },
+  renderTutorial: function (first) {
+    var t = this._tut, p = t.pages[t.i], self = this;
+    var dots = t.pages.map(function (_, i) { return '<span class="' + (i === t.i ? 'on' : '') + '"></span>'; }).join('');
+    var html = '<div class="tut">' +
+      '<div class="tut-dots">' + dots + '</div>' +
+      '<div class="tut-ic">' + (p.icon || '💡') + '</div>' +
+      '<h2>' + p.title + '</h2>' +
+      '<div class="tut-body">' + p.body + '</div>' +
+      '<div class="tut-nav">' +
+      '<button class="tut-skip">' + (t.i === 0 && t.pages.length > 1 ? 'Skip' : 'Close') + '</button>' +
+      (t.i > 0 ? '<button class="tut-back">◀ Back</button>' : '') +
+      '<button class="tut-next">' + (t.i < t.pages.length - 1 ? 'Next ▶' : 'Got it!') + '</button>' +
+      '</div></div>';
+    if (first) this.openModal('tutorial', html);
+    else this.el.modal.innerHTML = '<div class="panel">' + html + '</div>';
+    this.el.modal.querySelector('.tut-skip').onclick = function () { self.closeModal(); };
+    var back = this.el.modal.querySelector('.tut-back'); if (back) back.onclick = function () { FAB.sfx('click'); self._tut.i--; self.renderTutorial(false); };
+    this.el.modal.querySelector('.tut-next').onclick = function () {
+      FAB.sfx('click');
+      if (self._tut.i < self._tut.pages.length - 1) { self._tut.i++; self.renderTutorial(false); }
+      else self.closeModal();
+    };
   },
 
   // ---- hotbar -------------------------------------------------------------
@@ -255,7 +288,11 @@ FAB.UI = {
     var c = this.el.modal.querySelector('.close'); if (c) c.onclick = function () { self.closeModal(); };
     this.el.modal.onclick = function (ev) { if (ev.target === self.el.modal) self.closeModal(); };
   },
-  closeModal: function () { FAB.sfx('close'); this.el.modal.classList.add('hidden'); this.el.modal.innerHTML = ''; this.el.modal.dataset.kind = ''; },
+  closeModal: function () {
+    FAB.sfx('close');
+    if (this._tut) { var g = this._tut.game; g.stats.tutorialsSeen = g.stats.tutorialsSeen || {}; g.stats.tutorialsSeen[this._tut.key] = true; FAB.Save.save(g); this._tut = null; }
+    this.el.modal.classList.add('hidden'); this.el.modal.innerHTML = ''; this.el.modal.dataset.kind = '';
+  },
 
   // ---- inventory bag ------------------------------------------------------
   toggleBag: function () {

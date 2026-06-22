@@ -202,3 +202,42 @@ FAB.CAR_COLORS = [
   { id: 'black', name: 'Black', hex: '#2c2c34' },
   { id: 'white', name: 'White', hex: '#ecf0f1' }
 ];
+
+// Tutorial dialogs, keyed by milestone number. Shown once (Next/Back to step
+// through, Skip to dismiss) when that milestone's features become available.
+FAB.TUTORIALS = {
+  1: [
+    { icon: '👋', title: 'Welcome to Fabrik!', body: 'Walk with the <b>arrow keys</b> (or WASD). Walk up to a grey <b>Iron</b> rock and <b>hold Space</b> to dig it up.' },
+    { icon: '⛏️', title: 'Make Iron Plates', body: 'Open <b>Build (B)</b>, place a <b>Drill ⛏️</b> right on the iron, and a <b>Furnace 🔥</b> next to it. Turn the drill with <b>R</b> so it faces the furnace, then click the furnace and choose <b>Iron Plate</b>.' }
+  ],
+  2: [
+    { icon: '➡️', title: 'Conveyor Belts', body: 'Belts carry items along the arrows. <b>Click and drag</b> to draw a long belt in one go — it even turns corners by itself!' },
+    { icon: '🦾', title: 'Grabber Arms', body: 'A <b>Grabber Arm</b> loads machines. It grabs from the tile <b>behind</b> it and drops where its <b>arrow points</b> (press <b>R</b> to turn it). Belts can\'t pull items OUT of a machine — use an arm for that.' },
+    { icon: '📦', title: 'Storage Box', body: 'A <b>Storage Box</b> holds any items. Send your iron plates into a box to collect them!' }
+  ],
+  3: [
+    { icon: '🔧', title: 'The Assembler', body: 'The <b>Assembler</b> combines parts into new things like <b>Gears</b> and <b>Wire</b>. Click it to choose what to make. It\'s big (2×2) so lots of belts can feed it!' },
+    { icon: '🪨', title: 'Crusher & Sawmill', body: 'The <b>Crusher</b> turns Stone into Sand, and the <b>Sawmill</b> turns Logs into Planks. Find Stone in the sandy <b>Quarry</b> and Wood in the <b>Forest</b> — press <b>M</b> for a map!' }
+  ],
+  4: [
+    { icon: '🛢️', title: 'Oil & Pipes', body: 'Find dark <b>Oil</b> pools in the Marsh. Put an <b>Oil Pump ⛽</b> on one, then <b>drag Pipes 🟢</b> to carry the oil.' },
+    { icon: '🏭', title: 'Refinery', body: 'Send oil into a <b>Refinery</b> to make <b>Rubber</b>, <b>Plastic</b> or <b>Paint</b>. Click it to pick which. Rubber + a metal Rim makes <b>Wheels</b> — your first car part!' }
+  ],
+  5: [
+    { icon: '🌉', title: 'Belt Bridge', body: 'Belts can now <b>cross</b>! Just <b>drag a belt right across another belt</b> and a Belt Bridge appears. The two lines of items cross over without mixing.' }
+  ],
+  7: [
+    { icon: '🏭', title: 'Car Factory', body: 'The big <b>Car Factory</b> (4×4) builds cars from a Chassis, Motor, Wheel Set and Paint. Click it to pick the <b>colour</b> and car type.' },
+    { icon: '🛣️', title: 'Parking & Road', body: 'Place a <b>Parking Lot</b> (4×4) and connect it to the factory\'s garage door with a <b>Road 🛣️</b> (drag to draw). The factory only builds a car when a parking spot is free!' },
+    { icon: '🚗', title: 'Drive!', body: 'A finished car drives out of the garage and parks. Walk up to it and press <b>E</b> to drive around. Press <b>E</b> again to hop out.' }
+  ],
+  8: [
+    { icon: '🎨', title: 'Car Colours', body: 'Set a <b>Refinery</b> to <b>Paint</b> and pick a colour. The Car Factory paints cars that colour (you can also pick the colour on the factory). Make cars in <b>3 different colours</b>!' }
+  ],
+  9: [
+    { icon: '🪂', title: 'Sporty Cars', body: 'Build a <b>Spoiler</b> (Plastic Panels + Steel Beam), then choose the <b>Sporty Car</b> in the Car Factory. The spoiler makes your car go <b>faster</b>!' }
+  ],
+  10: [
+    { icon: '🧲', title: 'The Grappler', body: 'Build a <b>Grappler</b> and choose the <b>Super Car</b>. While driving, press <b>F</b> to grab things with the magnet claw — pick them up and fling them around!' }
+  ]
+};
