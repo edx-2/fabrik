@@ -327,19 +327,26 @@ FAB.Game.prototype.render = function () {
     else { var dec = this.world.decor[FAB.key(x, y)]; if (dec) { ctx.font = '20px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(dec, x * T - cam.x + T / 2, y * T - cam.y + T / 2); } }
   }
 
-  // factory entities, drawn in layers so nothing covers belt/bridge cargo:
-  //   1) belt + bridge BODIES   2) belt + bridge ITEMS   3) machines/pipes/arms.
-  // Bridges share the belt layers so an item arriving on the incoming belt isn't
-  // hidden under the bridge body (it lines up with the items already on the bridge).
+  // factory entities, drawn in layers so an item never hides under a body:
+  //   1) belt bodies + bridge UNDER-lane (horizontal) bodies
+  //   2) belt items + bridge UNDER-lane items   (incoming items line up here)
+  //   3) bridge OVERPASS (vertical) body + its items, on TOP, so items crossing
+  //      UNDER the bridge are hidden and items going OVER it stay visible
+  //   4) machines / pipes / arms
   var self = this, T = FAB.TILE, cam = this.cam, belts = [], crosses = [], others = [];
   this.factory.eachEntity(function (e) {
     if (e.x + e.size < x0 || e.x > x1 || e.y + e.size < y0 || e.y > y1) return;
     if (e.kind === 'belt') belts.push(e); else if (e.kind === 'cross') crosses.push(e); else others.push(e);
   });
   belts.forEach(function (e) { self.drawBeltBody(ctx, e); });
-  crosses.forEach(function (e) { self.drawCrossBody(ctx, e, e.x * T - cam.x, e.y * T - cam.y); });
+  crosses.forEach(function (e) { self._crossLane(ctx, e, e.x * T - cam.x, e.y * T - cam.y, true, false); });  // under-road body
   belts.forEach(function (e) { self.drawBeltItems(ctx, e); });
-  crosses.forEach(function (e) { self.drawCrossItems(ctx, e, e.x * T - cam.x, e.y * T - cam.y); });
+  crosses.forEach(function (e) { self._crossLane(ctx, e, e.x * T - cam.x, e.y * T - cam.y, true, true); });   // items UNDER the bridge
+  crosses.forEach(function (e) {                                                                              // overpass body + items OVER it
+    var ex = e.x * T - cam.x, ey = e.y * T - cam.y;
+    self._crossLane(ctx, e, ex, ey, false, false);
+    self._crossLane(ctx, e, ex, ey, false, true);
+  });
   others.forEach(function (e) { self.drawEntity(ctx, e); });
 
   // props
@@ -609,19 +616,14 @@ FAB.Game.prototype.drawPipe = function (ctx, e, sx, sy) {
 // Belt bridge: two perpendicular belt lanes on one tile. The vertical lane is
 // drawn as an overpass (with a shadow) over the horizontal one, so the two flows
 // visibly cross without mixing. Items on each lane ride independently.
+// Full single-tile draw (used by the build thumbnail / drawEntity fallback).
+// Order makes the vertical lane an overpass: under-road, items under it, then the
+// overpass deck and the items riding over it.
 FAB.Game.prototype.drawCross = function (ctx, e, sx, sy) {
-  this.drawCrossBody(ctx, e, sx, sy);
-  this.drawCrossItems(ctx, e, sx, sy);
-};
-// the two lane BODIES (horizontal under the vertical overpass), no cargo
-FAB.Game.prototype.drawCrossBody = function (ctx, e, sx, sy) {
-  this._crossLane(ctx, e, sx, sy, true, false);
-  this._crossLane(ctx, e, sx, sy, false, false);
-};
-// the cargo on both lanes — drawn in the belt-ITEMS pass so incoming items line up
-FAB.Game.prototype.drawCrossItems = function (ctx, e, sx, sy) {
-  this._crossLane(ctx, e, sx, sy, true, true);
-  this._crossLane(ctx, e, sx, sy, false, true);
+  this._crossLane(ctx, e, sx, sy, true, false);   // horizontal (under) body
+  this._crossLane(ctx, e, sx, sy, true, true);    // horizontal items (under)
+  this._crossLane(ctx, e, sx, sy, false, false);  // vertical overpass body
+  this._crossLane(ctx, e, sx, sy, false, true);   // vertical items (over)
 };
 FAB.Game.prototype._crossLane = function (ctx, e, sx, sy, horiz, itemsPass) {
   var T = FAB.TILE, cx = sx + T / 2, cy = sy + T / 2;
@@ -805,15 +807,15 @@ FAB.Game.prototype.drawBeltBody = function (ctx, e) {
   ctx.drawImage(this.beltSprite(shape.type, e.dir, shape.from, frame), sx, sy);
 };
 
-// A small data-URL thumbnail for machines that are drawn procedurally (so the
-// build bar shows what they actually look like instead of a generic emoji).
-FAB.Game.prototype.machineThumb = function (type) {
-  this._thumbs = this._thumbs || {};
-  if (type in this._thumbs) return this._thumbs[type];
-  if (typeof document === 'undefined') { this._thumbs[type] = null; return null; }
-  var T = FAB.TILE, S = 2, url = null;
-  var c = document.createElement('canvas'); c.width = T * S; c.height = T * S;
-  var x = c.getContext('2d'); x.scale(S, S);
+// A cached canvas thumbnail for machines that are drawn procedurally (belt, pipe,
+// road, grabber, bridge) — so the build bar AND the drag ghost show what they
+// actually look like instead of a generic emoji. Returns a canvas or null.
+FAB.Game.prototype.machineThumbCanvas = function (type) {
+  this._thumbCanvas = this._thumbCanvas || {};
+  if (type in this._thumbCanvas) return this._thumbCanvas[type];
+  if (typeof document === 'undefined') { this._thumbCanvas[type] = null; return null; }
+  var T = FAB.TILE, S = 2, c = document.createElement('canvas'); c.width = T * S; c.height = T * S;
+  var x = c.getContext('2d'); x.scale(S, S); var ok = true;
   try {
     if (type === 'belt') { x.drawImage(this.beltSprite('straight', 1, 3, 0), 0, 0); }
     else if (type === 'road') {
@@ -827,9 +829,17 @@ FAB.Game.prototype.machineThumb = function (type) {
       x.beginPath(); x.arc(T / 2, cy, W / 2 + 2, 0, 6.283); x.fillStyle = '#3f8a4e'; x.fill(); x.lineWidth = 2; x.strokeStyle = '#26512f'; x.stroke();
     } else if (type === 'grabber') { this.drawArm(x, { x: 0, y: 0, dir: 1, cooldown: 0, carryItem: null }, 0, 0); }
     else if (type === 'crossing') { this.drawCross(x, { x: 0, y: 0, dir: 1, dirH: 1, dirV: 2, itemsH: [], itemsV: [] }, 0, 0); }
-    else { this._thumbs[type] = null; return null; }
-    url = c.toDataURL();
-  } catch (e) { url = null; }
+    else ok = false;
+  } catch (e) { ok = false; }
+  this._thumbCanvas[type] = ok ? c : null;
+  return this._thumbCanvas[type];
+};
+// data-URL version of the thumbnail, for DOM <img> (the build bar). null if none.
+FAB.Game.prototype.machineThumb = function (type) {
+  this._thumbs = this._thumbs || {};
+  if (type in this._thumbs) return this._thumbs[type];
+  var c = this.machineThumbCanvas(type), url = null;
+  try { url = c ? c.toDataURL() : null; } catch (e) { url = null; }
   this._thumbs[type] = url; return url;
 };
 
@@ -992,12 +1002,22 @@ FAB.Game.prototype.drawCar = function (ctx, c) {
 };
 
 FAB.Game.prototype.drawGhost = function (ctx) {
-  var mt = this.mouseTile(), T = FAB.TILE, sz = this.factory.footprint(this.buildType) * T;
+  var t = this.buildType, mt = this.mouseTile(), T = FAB.TILE, sz = this.factory.footprint(t) * T;
   var sx = mt.x * T - this.cam.x, sy = mt.y * T - this.cam.y;
-  var ok = this.factory.canPlace(this.buildType, mt.x, mt.y, this.world);
-  ctx.save(); ctx.globalAlpha = 0.55;
-  FAB.Placeholder.box(ctx, sx, sy, sz, sz, ok ? '#7be37b' : '#e06b6b', FAB.MACHINES[this.buildType].icon);
-  if (FAB.MACHINES[this.buildType].rotates) this.drawDirArrow(ctx, { dir: this.buildDir }, sx, sy, sz);
+  var ok = this.factory.canPlace(t, mt.x, mt.y, this.world);
+  ctx.save(); ctx.globalAlpha = 0.6;
+  // tinted footprint, then the machine's REAL picture (asset or procedural thumb)
+  FAB.roundRect(ctx, sx + 1, sy + 1, sz - 2, sz - 2, Math.min(8, sz * 0.18));
+  ctx.fillStyle = ok ? 'rgba(123,227,123,0.30)' : 'rgba(224,107,107,0.38)'; ctx.fill();
+  var drew = false;
+  if (t === 'belt') { ctx.drawImage(this.beltSprite('straight', this.buildDir, FAB.opposite(this.buildDir), 0), sx, sy, sz, sz); drew = true; }
+  else if (FAB.Assets.has('machine_' + t)) { drew = FAB.Assets.draw(ctx, 'machine_' + t, sx, sy, sz, sz, 0); }
+  if (!drew) { var th = this.machineThumbCanvas(t); if (th) { ctx.drawImage(th, sx, sy, sz, sz); drew = true; } }
+  if (!drew) FAB.Placeholder.box(ctx, sx, sy, sz, sz, ok ? '#7be37b' : '#e06b6b', FAB.MACHINES[t].icon);
+  ctx.globalAlpha = 0.9;                                   // crisp ok/bad outline
+  FAB.roundRect(ctx, sx + 1, sy + 1, sz - 2, sz - 2, Math.min(8, sz * 0.18));
+  ctx.lineWidth = 3; ctx.strokeStyle = ok ? '#7be37b' : '#e06b6b'; ctx.stroke();
+  if (FAB.MACHINES[t].rotates) this.drawDirArrow(ctx, { dir: this.buildDir }, sx, sy, sz);
   ctx.restore();
 };
 
