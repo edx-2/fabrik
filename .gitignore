@@ -15,4 +15,9 @@ Thumbs.db
 /screenshot_harness.html
 /*.png
 
+# test artifacts (captured screenshots + diffs; goldens ARE committed)
+/tests/screens/out/
+/tests/screens/diff/
+/node_modules/
+
 assets/eleven_labs_api_key.txt

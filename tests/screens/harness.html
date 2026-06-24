@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="../../css/style.css" />
+  <style>html,body{margin:0;background:#0c1622;overflow:hidden}</style>
+</head>
+<body>
+  <div id="stage"><canvas id="game"></canvas><div id="ui"></div></div>
+  <script src="../../assets/generated/manifest.js" onerror="window.__noart=1"></script>
+  <script src="../../assets/generated/sfx_manifest.js" onerror="window.__nosfx=1"></script>
+  <script src="../../js/util.js"></script>
+  <script src="../../js/data.js"></script>
+  <script src="../../js/assets.js"></script>
+  <script src="../../js/audio.js"></script>
+  <script src="../../js/world.js"></script>
+  <script src="../../js/factory.js"></script>
+  <script src="../../js/player.js"></script>
+  <script src="../../js/car.js"></script>
+  <script src="../../js/input.js"></script>
+  <script src="../../js/save.js"></script>
+  <script src="../../js/ui.js"></script>
+  <script src="../../js/game.js"></script>
+  <script src="scenes.js"></script>
+  <script>
+    // Deterministic rendering: freeze all clocks so animations are stable, and
+    // silence audio so nothing tries to play.
+    var FROZEN = 1000;
+    performance.now = function () { return FROZEN; };
+    Date.now = function () { return FROZEN; };
+    if (FAB.Audio) { FAB.Audio.play = FAB.Audio.startLoop = FAB.Audio.stopLoop = function () {}; }
+
+    function meta(name) { for (var i = 0; i < window.SCENE_META.length; i++) if (window.SCENE_META[i].name === name) return window.SCENE_META[i]; return null; }
+
+    function whenAssetsReady(cb) {
+      var defs = FAB.Assets && FAB.Assets.defs ? Object.keys(FAB.Assets.defs).length : 0;
+      var tries = 0;
+      (function poll() {
+        var loaded = FAB.Assets ? Object.keys(FAB.Assets.ready).length : 0;
+        if (loaded >= defs || tries++ > 120) cb();
+        else setTimeout(poll, 25);
+      })();
+    }
+
+    window.addEventListener('load', function () {
+      var name = (location.search.match(/scene=([\w]+)/) || [])[1] || 'world';
+      var m = meta(name) || { name: name, w: 640, h: 480 };
+      var canvas = document.getElementById('game');
+      canvas.width = m.w; canvas.height = m.h;
+      try { for (var i = localStorage.length - 1; i >= 0; i--) { var k = localStorage.key(i); if (k && k.indexOf('fabrik:') === 0) localStorage.removeItem(k); } } catch (e) {}
+
+      // asset/sfx paths in the manifest are relative to the game root; this page
+      // is two levels down, so prepend ../../ before the asset manager loads them.
+      if (window.FAB_ASSETS && window.FAB_ASSETS.base && window.FAB_ASSETS.base.indexOf('../') !== 0)
+        window.FAB_ASSETS.base = '../../' + window.FAB_ASSETS.base;
+
+      FAB.UI.boot(canvas);
+      var g = null;
+      if (!m.noStart) {
+        FAB.UI.startGame(m.seed || 'TESTSCENE', null);
+        g = FAB.UI.game; g.stop();           // halt the rAF loop; we render manually
+        FAB.UI._tut = null; FAB.UI.closeModal(); // discard the auto welcome tutorial; scenes opt in explicitly
+      }
+      if (g && !m.hud) FAB.UI.el.hud.classList.add('hidden'); // clean canvas for showcase scenes
+      var build = window.SCENES[name];
+      if (build) build(g, FAB, m);
+      if (g) {
+        for (var t = 0; t < (m.ticks || 0); t++) g.factory.tick(g);
+        if (!g._sceneFixedCam) g.update(0);  // initialise the camera
+      }
+      if (m.hud && g) FAB.UI.renderHUD(g);
+
+      whenAssetsReady(function () {
+        if (g) g.render();
+        if (m.hud && g) FAB.UI.renderHUD(g);
+        document.title = 'ready:' + name;
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "fabrik",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fabrik — a browser factory-building game for kids. The test suite uses only Node built-ins (no dependencies) plus headless Chrome for screenshots.",
+  "scripts": {
+    "test": "node tests/run-behavior.js && node tests/run-screens.js",
+    "test:behavior": "node tests/run-behavior.js",
+    "test:screens": "node tests/run-screens.js",
+    "test:update": "node tests/run-screens.js --update"
+  }
+}
