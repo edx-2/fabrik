@@ -40,6 +40,7 @@ FAB.easeOutBack = function (x) { var c1 = 2.2, c3 = c1 + 1; var p = x - 1; retur
 // audio helpers — safe no-ops when the audio manager isn't present (e.g. tests)
 FAB.sfx = function (id, opts) { if (FAB.Audio && FAB.Audio.play) FAB.Audio.play(id, opts); };
 FAB.sfxLoop = function (id, vol) { if (FAB.Audio && FAB.Audio.startLoop) FAB.Audio.startLoop(id, vol); };
+FAB.sfxLoopVolume = function (id, vol) { if (FAB.Audio && FAB.Audio.setLoopVolume) FAB.Audio.setLoopVolume(id, vol); };
 FAB.sfxStop = function (id) { if (FAB.Audio && FAB.Audio.stopLoop) FAB.Audio.stopLoop(id); };
 FAB.dist2 = function (ax, ay, bx, by) { var dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
 FAB.key = function (x, y) { return x + ',' + y; };

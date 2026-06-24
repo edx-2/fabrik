@@ -103,6 +103,13 @@ FAB.Audio = {
     try { if (L.web) L.src.stop(); else { L.el.pause(); L.el.currentTime = 0; } } catch (e) {}
     delete this.loops[id];
   },
+  // adjust the volume of an already-playing loop (e.g. distance-based fade)
+  setLoopVolume: function (id, vol) {
+    var L = this.loops[id]; if (!L) return;
+    L.vol = vol;
+    if (this.muted) return;
+    try { if (L.web) L.gain.gain.value = vol; else L.el.volume = vol < 0 ? 0 : (vol > 1 ? 1 : vol); } catch (e) {}
+  },
 
   setMuted: function (m) {
     this.muted = !!m;

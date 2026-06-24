@@ -160,17 +160,40 @@ FAB.Game.prototype.update = function (dt) {
 
   this.checkMilestone();
 
-  // gentle conveyor hum while any belts exist
-  this._beltCheckT = (this._beltCheckT || 0) + dt;
-  if (this._beltCheckT > 0.6) {
-    this._beltCheckT = 0; var hasBelt = false;
-    this.factory.eachEntity(function (e) { if (e.kind === 'belt' || e.kind === 'cross') hasBelt = true; });
-    if (hasBelt) FAB.sfxLoop('belt_loop'); else FAB.sfxStop('belt_loop');
-  }
+  // gentle conveyor hum: only near belts, and quieter with distance
+  this._updateBeltHum(dt);
 
   // autosave every ~10s
   this._saveT = (this._saveT || 0) + dt;
   if (this._saveT > 10) { this._saveT = 0; FAB.Save.save(this); }
+};
+
+// Conveyor hum that you only hear near a belt and that fades with distance.
+FAB.Game.prototype.BELT_HUM_RANGE = 5;    // tiles you can hear a belt from
+FAB.Game.prototype.BELT_HUM_MAX = 0.12;   // loudest, standing right on a belt
+// Volume for the hum based on the nearest belt/bridge to the player (0 = none in range).
+FAB.Game.prototype._nearestBeltVol = function () {
+  var T = FAB.TILE, foc = this.driving || this.player;
+  var ptx = foc.x / T, pty = foc.y / T, R = this.BELT_HUM_RANGE;
+  var px = Math.round(ptx), py = Math.round(pty), r = Math.ceil(R), best = 1e9;
+  for (var dy = -r; dy <= r; dy++) for (var dx = -r; dx <= r; dx++) {
+    var e = this.factory.at(px + dx, py + dy);
+    if (e && (e.kind === 'belt' || e.kind === 'cross')) {
+      var d = Math.hypot((px + dx + 0.5) - ptx, (py + dy + 0.5) - pty);
+      if (d < best) best = d;
+    }
+  }
+  if (best > R) return 0;
+  return this.BELT_HUM_MAX * FAB.clamp(1 - best / R, 0, 1);
+};
+FAB.Game.prototype._updateBeltHum = function (dt) {
+  this._beltCheckT = (this._beltCheckT || 0) + dt;
+  if (this._beltCheckT > 0.2) { this._beltCheckT = 0; this._beltTargetVol = this._nearestBeltVol(); }
+  var target = this._beltTargetVol || 0, cur = this._beltVol || 0;
+  cur += (target - cur) * Math.min(1, dt * 8);   // smooth fade in/out as you move
+  this._beltVol = cur;
+  if (target > 0.003 || cur > 0.003) { FAB.sfxLoop('belt_loop', cur); FAB.sfxLoopVolume('belt_loop', cur); }
+  else { this._beltVol = 0; FAB.sfxStop('belt_loop'); }
 };
 
 FAB.Game.prototype.toggleDrive = function () {
